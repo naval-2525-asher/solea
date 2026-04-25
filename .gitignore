@@ -8,6 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+bun.lock
+bun.lockb
+package-lock.json
+public/images
+public/accessories
+public/IMG_0025.jpg
+public/IMG_0026.jpg
 dist
 dist-ssr
 *.local
