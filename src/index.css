@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 43% 97%;
+    --foreground: 0 70% 34%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 70% 34%;
+
+    --popover: 30 43% 97%;
+    --popover-foreground: 0 70% 34%;
+
+    --primary: 0 70% 34%;
+    --primary-foreground: 30 43% 97%;
+
+    --secondary: 24 30% 90%;
+    --secondary-foreground: 0 70% 34%;
+
+    --muted: 24 30% 90%;
+    --muted-foreground: 0 30% 50%;
+
+    --accent: 347 78% 81%;
+    --accent-foreground: 0 70% 34%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 24 30% 88%;
+    --input: 24 30% 88%;
+    --ring: 0 70% 34%;
+
+    --radius: 1.25rem;
+
+    /* soléa brand tokens */
+    --solea-cream: 30 43% 97%;
+    --solea-beige: 36 36% 85%;
+    --solea-pink: 347 78% 81%;
+    --solea-blush: 347 68% 93%;
+    --solea-maroon: 0 70% 34%;
+    --solea-rose: 350 30% 62%;
+    --solea-warm: 24 38% 92%;
+
+    --navbar-stripe-pink: 347 78% 81%;
+    --navbar-stripe-beige: 36 36% 85%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+}
+
+/* Scrolling image track animation */
+@keyframes scroll-images {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.image-scroll-track {
+  display: flex;
+  gap: 1rem;
+  animation: scroll-images 60s linear infinite;
+  width: max-content;
+}
+
+.image-scroll-track:hover {
+  animation-play-state: paused;
+}
+
+/* Hide scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Marquee text animation */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
