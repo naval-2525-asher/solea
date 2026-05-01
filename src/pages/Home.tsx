@@ -152,7 +152,7 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
   return (
     <Link to={href} className="no-underline" style={{ display: "block", width: "100%" }}>
       <div className="bg-solea-warm rounded-2xl overflow-hidden cursor-pointer transition-transform duration-200 hover:scale-105 border border-border shadow-sm" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ width: "100%", aspectRatio: "1 / 1", overflow: "hidden", flexShrink: 0, position: "relative" }}>
+        <div style={{ width: "100%", aspectRatio: "3 / 4", overflow: "hidden", flexShrink: 0, position: "relative" }}>
           {(product.image || product.images?.[0]) ? (
             <img src={product.image || product.images?.[0]} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           ) : (
@@ -166,7 +166,7 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
             </span>
           )}
         </div>
-        <div className="p-4" style={{ flexGrow: 1 }}>
+        <div className="p-3" style={{ flexGrow: 1 }}>
           <p className="text-foreground font-serif font-bold text-sm">{product.name}</p>
           {salePrice !== undefined ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
@@ -203,19 +203,19 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
   if (items.length === 0) return null;
 
   return (
-    <div style={{ position: "relative", paddingLeft: "40px", paddingRight: "40px" }}>
+    <div style={{ position: "relative", paddingLeft: "36px", paddingRight: "36px" }}>
       {/* Prev */}
       <button
         onClick={() => setPage((p) => Math.max(0, p - 1))}
         disabled={page === 0}
-        className="absolute left-0 z-10 w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        style={{ top: "40%", transform: "translateY(-50%)" }}
+        className="absolute left-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{ top: "38%", transform: "translateY(-50%)" }}
       >
-        <ChevronLeft className="h-5 w-5 text-foreground" />
+        <ChevronLeft className="h-4 w-4 text-foreground" />
       </button>
 
       {/* Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "10px" }}>
         {visibleItems.map((item, i) => renderCard(item, i))}
         {Array.from({ length: perPage - visibleItems.length }).map((_, i) => <div key={`e-${i}`} />)}
       </div>
@@ -224,10 +224,10 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
       <button
         onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
         disabled={page >= totalPages - 1}
-        className="absolute right-0 z-10 w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        style={{ top: "40%", transform: "translateY(-50%)" }}
+        className="absolute right-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{ top: "38%", transform: "translateY(-50%)" }}
       >
-        <ChevronRight className="h-5 w-5 text-foreground" />
+        <ChevronRight className="h-4 w-4 text-foreground" />
       </button>
 
       {/* Dots */}
@@ -264,10 +264,10 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
   }, [isMobile, reviews.length]);
 
   const ReviewCard = ({ customer }: { customer: any }) => (
-    <div className="review-card p-8" style={{ position: "relative", overflow: "hidden" }}>
-      <span style={{ position: "absolute", top: 4, left: 12, fontFamily: "serif", fontSize: 72, lineHeight: 1, color: "hsl(var(--solea-rose) / 0.2)", userSelect: "none", pointerEvents: "none" }}>"</span>
-      <span style={{ position: "absolute", bottom: 0, right: 12, fontFamily: "serif", fontSize: 72, lineHeight: 1, color: "hsl(var(--solea-rose) / 0.2)", userSelect: "none", pointerEvents: "none" }}>"</span>
-      <p className="text-foreground font-serif text-sm leading-relaxed italic" style={{ opacity: 0.85, position: "relative", zIndex: 1 }}>{customer.review_text}</p>
+    <div className="review-card" style={{ padding: "48px 40px", minHeight: 160, position: "relative", overflow: "hidden" }}>
+      <span style={{ position: "absolute", top: 4, left: 12, fontFamily: "serif", fontSize: 80, lineHeight: 1, color: "hsl(var(--solea-rose) / 0.2)", userSelect: "none", pointerEvents: "none" }}>"</span>
+      <span style={{ position: "absolute", bottom: 0, right: 12, fontFamily: "serif", fontSize: 80, lineHeight: 1, color: "hsl(var(--solea-rose) / 0.2)", userSelect: "none", pointerEvents: "none" }}>"</span>
+      <p className="text-foreground font-serif text-base leading-relaxed italic" style={{ opacity: 0.85, position: "relative", zIndex: 1 }}>{customer.review_text}</p>
     </div>
   );
 
@@ -281,31 +281,13 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
       </Reveal>
 
       {isMobile ? (
-        /* Mobile: single card carousel with arrows + auto-advance */
-        <div style={{ position: "relative", maxWidth: 400, margin: "0 auto" }}>
-          <button
-            onClick={() => setReviewPage((p) => (p - 1 + reviews.length) % reviews.length)}
-            className="absolute left-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
-            style={{ top: "50%", transform: "translate(-50%, -50%)" }}
-          >
-            <ChevronLeft className="h-4 w-4 text-foreground" />
-          </button>
-
+        /* Mobile: single card carousel, auto-advances, no arrows */
+        <div style={{ maxWidth: 500, margin: "0 auto", padding: "0 16px" }}>
           <div style={{ overflow: "hidden", borderRadius: 20 }}>
             {reviews.length > 0 && (
-              <div style={{ transition: "opacity 0.4s ease", opacity: 1 }}>
-                <ReviewCard customer={reviews[reviewPage]} />
-              </div>
+              <ReviewCard customer={reviews[reviewPage]} />
             )}
           </div>
-
-          <button
-            onClick={() => setReviewPage((p) => (p + 1) % reviews.length)}
-            className="absolute right-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
-            style={{ top: "50%", transform: "translate(50%, -50%)" }}
-          >
-            <ChevronRight className="h-4 w-4 text-foreground" />
-          </button>
 
           {/* Dots */}
           {reviews.length > 1 && (
@@ -434,25 +416,25 @@ const Home = () => {
         </section>
 
         {/* ── Best Sellers Carousel ── */}
-        <section className="py-20 px-8 bg-background">
+        <section className="py-16 bg-background" style={{ paddingLeft: "12px", paddingRight: "12px" }}>
           <Reveal>
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Best Sellers</h2>
             <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">⁺₊⋆ our most loved pieces ⋆⁺₊</p>
           </Reveal>
-          <div className="max-w-[1100px] mx-auto">
+          <div>
             {validBestSellers.length > 0 ? (
               <ProductCarousel
                 items={validBestSellers}
                 renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
               />
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", padding: "0 40px" }}>
-                {[1, 2, 3].map((i) => (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", padding: "0 36px" }}>
+                {[1, 2].map((i) => (
                   <div key={i} className="bg-solea-warm rounded-2xl overflow-hidden border border-border shadow-sm">
-                    <div style={{ width: "100%", aspectRatio: "1 / 1", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
+                    <div style={{ width: "100%", aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
                       <span className="text-3xl">🪡</span>
                     </div>
-                    <div className="p-5"><p className="text-foreground font-serif font-bold text-base">Coming Soon</p><p className="text-foreground font-serif text-sm opacity-70 mt-1">PKR —</p></div>
+                    <div className="p-3"><p className="text-foreground font-serif font-bold text-sm">Coming Soon</p><p className="text-foreground font-serif text-xs opacity-70 mt-1">PKR —</p></div>
                   </div>
                 ))}
               </div>
@@ -491,7 +473,7 @@ const Home = () => {
 
         {/* ── On Sale Carousel ── */}
         {validSaleItems.length > 0 && (
-          <section className="py-20 px-8 bg-background">
+          <section className="py-16 bg-background" style={{ paddingLeft: "12px", paddingRight: "12px" }}>
             <Reveal>
               <div className="flex items-center justify-center gap-3 mb-2">
                 <span style={{ color: "#dc2626", fontSize: "1.2em" }}>🏷️</span>
@@ -508,7 +490,7 @@ const Home = () => {
                 </Link>
               </div>
             </Reveal>
-            <div className="max-w-[1100px] mx-auto">
+            <div>
               <ProductCarousel
                 items={validSaleItems}
                 renderCard={(s, i) => <ProductCard key={s.id} product={s.products} salePrice={s.sale_price} />}

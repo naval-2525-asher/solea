@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useProducts, useNewArrivals, useSaleProducts } from "@/hooks/useAdminData";
 import { products as staticProducts } from "@/lib/products";
@@ -17,23 +17,18 @@ const calcDiscount = (original: number, sale: number) =>
 
 const ProductCard = ({ product, showNewBadge = false, viewMode = "triple", salePrice }: { product: any; showNewBadge?: boolean; viewMode?: ViewMode; salePrice?: number }) => {
   const oos = isOutOfStock(product);
-  const imgHeight = viewMode === "double" ? "400px" : "340px";
+  const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "320px" : "280px";
   const discount = salePrice ? calcDiscount(product.price, salePrice) : null;
   return (
     <Link to={`/product/${product.id}`} className="no-underline">
-      <div
-        className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative"
-        style={{ opacity: oos ? 0.85 : 1 }}
-      >
+      <div className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative" style={{ opacity: oos ? 0.85 : 1 }}>
         {discount && !oos && (
           <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "4px 10px", borderRadius: "2rem" }}>
             -{discount}%
           </div>
         )}
         {showNewBadge && !oos && !discount && (
-          <div className="absolute top-2 left-2 z-10 bg-destructive text-white font-serif font-black text-[10px] tracking-[0.15em] uppercase px-2.5 py-1 rounded-full">
-            NEW
-          </div>
+          <div className="absolute top-2 left-2 z-10 bg-destructive text-white font-serif font-black text-[10px] tracking-[0.15em] uppercase px-2.5 py-1 rounded-full">NEW</div>
         )}
         {oos && (
           <div style={{ position: "absolute", top: 8, left: 8, zIndex: 10, background: "hsl(0 84.2% 60.2%)", color: "#fff", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 900, fontSize: "0.62rem", letterSpacing: "0.15em", textTransform: "uppercase", padding: "4px 10px", borderRadius: "2rem" }}>
@@ -74,16 +69,32 @@ const ProductCard = ({ product, showNewBadge = false, viewMode = "triple", saleP
   );
 };
 
-const getGridCols = (viewMode: ViewMode) => {
-  if (viewMode === "double") return "grid-cols-1 sm:grid-cols-2";
-  return "grid-cols-2 sm:grid-cols-3";
+const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
+  if (viewMode === "single") return { display: "grid", gridTemplateColumns: "1fr", gap: "16px" };
+  if (viewMode === "double") return { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" };
+  return { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" };
 };
 
 const Shop = () => {
   const { data: dbProducts = [], isLoading } = useProducts();
   const { data: newArrivalsData = [] } = useNewArrivals();
   const { data: saleData = [] } = useSaleProducts();
+
+  // Default: 2 cols on mobile, 3 cols on desktop
   const [viewMode, setViewMode] = useState<ViewMode>("triple");
+
+  useEffect(() => {
+    const update = () => {
+      if (window.innerWidth < 768) {
+        setViewMode("double");
+      } else {
+        setViewMode("triple");
+      }
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const salePriceMap = Object.fromEntries(
     (saleData as any[]).map((s: any) => [s.product_id, s.sale_price])
@@ -114,7 +125,7 @@ const Shop = () => {
             <h2 className="text-foreground font-serif text-2xl font-black">New Arrivals</h2>
             <p className="text-foreground/60 font-serif text-xs tracking-wide mt-0.5">fresh off the needle ✦</p>
           </div>
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {newArrivalProducts.map((product: any) => (
               <ProductCard key={product.id} product={product} showNewBadge viewMode={viewMode} />
             ))}
@@ -144,7 +155,7 @@ const Shop = () => {
           />
         )}
         {isLoading ? (
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="bg-card rounded-lg overflow-hidden border border-border animate-pulse">
                 <div className="h-[340px] bg-secondary/50" />
@@ -156,7 +167,7 @@ const Shop = () => {
             ))}
           </div>
         ) : sorted.length > 0 ? (
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {sorted.map((product: any) => (
               <ProductCard key={product.id} product={product} viewMode={viewMode} salePrice={salePriceMap[product.id]} />
             ))}
