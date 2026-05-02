@@ -275,7 +275,7 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
     <section className="py-20 px-8 bg-background">
       <Reveal>
         <div className="text-center mb-12">
-          <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Happy Customers 🤍</h2>
+          <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Happy Customers </h2>
           <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-1">reviews from our DMs</p>
         </div>
       </Reveal>
@@ -519,9 +519,7 @@ const Home = () => {
                     <p className="font-serif" style={{ fontSize: "17px", color: "#8B1A2F", lineHeight: 1.9, margin: "0 0 32px 0", maxWidth: "360px" }}>
                       Soléa is a bead embroidery brand specializing in hand-embroidered designs that bring personality and charm to everyday clothing. Drawing inspiration from nostalgia and playful motifs, each Soléa piece is carefully crafted to feel timeless. Our work celebrates slow fashion and individuality.
                     </p>
-                    <p style={{ fontFamily: "'Dancing Script', 'Brush Script MT'", fontSize: "30px", color: "#8B1A2F", margin: "0 0 32px 0", lineHeight: 2, fontWeight: 700, opacity: 0.9 }}>
-                      delicate details that turn everyday clothing into something truly your own
-                    </p>
+                  
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", opacity: 0.45 }}>
                       <span style={{ color: "#8B1A2F", fontSize: "10px" }}>✦</span>
                       <span style={{ color: "#8B1A2F", fontSize: "7px" }}>✦</span>
