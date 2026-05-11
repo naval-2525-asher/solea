@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useProducts } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
@@ -11,14 +11,16 @@ const isOutOfStock = (product: any) =>
 
 const isLowStock = (product: any) => product.stock_status === "low_stock";
 
-const getGridCols = (viewMode: ViewMode) => {
-  if (viewMode === "double") return "grid-cols-1 sm:grid-cols-2";
-  return "grid-cols-2 sm:grid-cols-3";
+const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
+  if (viewMode === "single") return { display: "grid", gridTemplateColumns: "1fr", gap: "16px" };
+  if (viewMode === "double") return { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" };
+  return { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" };
 };
 
 const ProductCard = ({ product, viewMode = "triple" }: { product: any; viewMode?: ViewMode }) => {
   const oos = isOutOfStock(product);
-const imgHeight = viewMode === "double" ? "400px" : "340px";  return (
+  const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
+  return (
     <Link to={`/product/${product.id}`} className="no-underline">
       <div
         className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative"
@@ -59,7 +61,25 @@ const imgHeight = viewMode === "double" ? "400px" : "340px";  return (
 const LimitedEdition = () => {
   const { data: dbProducts = [], isLoading } = useProducts();
   const limited = dbProducts.filter((p: any) => p.category === "Limited Edition");
-  const [viewMode, setViewMode] = useState<ViewMode>("triple");
+
+  // Set initial viewMode based on screen size ONCE — never override after user changes it
+  const initialViewMode = (): ViewMode => (typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const userChangedView = useRef(false);
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    userChangedView.current = true;
+    setViewMode(mode);
+  };
+
+  useEffect(() => {
+    const update = () => {
+      if (userChangedView.current) return;
+      setViewMode(window.innerWidth < 768 ? "double" : "triple");
+    };
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const { sortBy, filters, sorted, filtered, maxPrice, hasFiltersApplied, setSortBy, setFilters } =
     useFilterSort(limited, true);
@@ -86,11 +106,11 @@ const LimitedEdition = () => {
             hasFiltersApplied={hasFiltersApplied}
             showSizeFilter={true}
             viewMode={viewMode}
-            onViewModeChange={setViewMode}
+            onViewModeChange={handleViewModeChange}
           />
         )}
         {isLoading ? (
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {[1, 2, 3].map((i) => (
               <div key={i} className="bg-card rounded-lg overflow-hidden border border-border animate-pulse">
                 <div className="h-[340px] bg-secondary/50" />
@@ -102,7 +122,7 @@ const LimitedEdition = () => {
             ))}
           </div>
         ) : sorted.length > 0 ? (
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {sorted.map((product: any) => (
               <ProductCard key={product.id} product={product} viewMode={viewMode} />
             ))}
