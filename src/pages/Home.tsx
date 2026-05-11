@@ -90,16 +90,21 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => {
   );
 };
 
-// ── Spotted Section — full width, larger cards ────────────────────────────
+// ── Spotted Section — fixed mobile dead space, arrows only as wide as needed ──
 const SpottedSection = () => {
   const { data: dbImages = [] } = useSpottedImages();
   const images = dbImages.length > 0 ? dbImages.map((img: any) => img.image) : fallbackSpotted;
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [startIndex, setStartIndex] = useState(0);
   const [cols, setCols] = useState(3);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const update = () => setCols(window.innerWidth < 768 ? 2 : 3);
+    const update = () => {
+      const mobile = window.innerWidth < 768;
+      setCols(mobile ? 2 : 3);
+      setIsMobile(mobile);
+    };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -112,6 +117,10 @@ const SpottedSection = () => {
     return { src: images[idx], key: `${idx}-${i}` };
   });
 
+  // On mobile use tighter arrow buttons to eliminate dead space
+  const arrowSize = isMobile ? 32 : 40;
+  const sidePadding = isMobile ? `${arrowSize + 6}px` : "56px";
+
   return (
     <section className="py-20 bg-background">
       <div className="px-8">
@@ -122,11 +131,15 @@ const SpottedSection = () => {
         </div>
         <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">our community wearing their favorites</p>
       </div>
-      <div className="relative w-full" style={{ paddingLeft: "56px", paddingRight: "56px" }}>
-        <button onClick={prev} className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors" style={{ top: "45%", transform: "translateY(-50%)" }}>
+      <div className="relative w-full" style={{ paddingLeft: sidePadding, paddingRight: sidePadding }}>
+        <button
+          onClick={prev}
+          className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
+          style={{ left: isMobile ? 4 : 8, top: "45%", transform: "translateY(-50%)", width: arrowSize, height: arrowSize }}
+        >
           <ChevronLeft className="h-5 w-5 text-foreground" />
         </button>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? "8px" : "16px" }}>
           {visibleImages.map(({ src, key }) => (
             <div key={key} onClick={() => setLightboxSrc(src)} style={{ cursor: "pointer", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
               <img src={src} alt="spotted" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s ease" }}
@@ -136,7 +149,11 @@ const SpottedSection = () => {
             </div>
           ))}
         </div>
-        <button onClick={next} className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors" style={{ top: "45%", transform: "translateY(-50%)" }}>
+        <button
+          onClick={next}
+          className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
+          style={{ right: isMobile ? 4 : 8, top: "45%", transform: "translateY(-50%)", width: arrowSize, height: arrowSize }}
+        >
           <ChevronRight className="h-5 w-5 text-foreground" />
         </button>
       </div>
@@ -145,7 +162,7 @@ const SpottedSection = () => {
   );
 };
 
-// ── Product Card ──────────────────────────────────────────────────────────────
+// ── Product Card — 30% smaller on desktop via maxWidth cap ───────────────────
 const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number }) => {
   const href = product.category === "Accessories" || product.category === "Bagcharms"
     ? `/accessories/${product.id}` : `/product/${product.id}`;
@@ -182,19 +199,23 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
   );
 };
 
-// ── Horizontal Product Carousel with responsive columns ───────────────────────
+// ── Horizontal Product Carousel — desktop cards capped at 70% of original size
 const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (item: any, i: number) => React.ReactNode }) => {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(3);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const update = () => setPerPage(window.innerWidth < 768 ? 2 : 3);
+    const update = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      setPerPage(mobile ? 2 : 3);
+    };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // Reset page when perPage changes
   useEffect(() => { setPage(0); }, [perPage]);
 
   const totalPages = Math.ceil(items.length / perPage);
@@ -202,8 +223,11 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
 
   if (items.length === 0) return null;
 
+  // On desktop, constrain the carousel width to ~70% of what it was (was full width)
+  const carouselMaxWidth = isMobile ? "100%" : "700px";
+
   return (
-    <div style={{ position: "relative", paddingLeft: "36px", paddingRight: "36px" }}>
+    <div style={{ maxWidth: carouselMaxWidth, margin: "0 auto", position: "relative", paddingLeft: "36px", paddingRight: "36px" }}>
       {/* Prev */}
       <button
         onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -254,7 +278,6 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // Auto-advance on mobile
   useEffect(() => {
     if (!isMobile || reviews.length === 0) return;
     const timer = setInterval(() => {
@@ -281,15 +304,12 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
       </Reveal>
 
       {isMobile ? (
-        /* Mobile: single card carousel, auto-advances, no arrows */
         <div style={{ maxWidth: 500, margin: "0 auto", padding: "0 16px" }}>
           <div style={{ overflow: "hidden", borderRadius: 20 }}>
             {reviews.length > 0 && (
               <ReviewCard customer={reviews[reviewPage]} />
             )}
           </div>
-
-          {/* Dots */}
           {reviews.length > 1 && (
             <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 20 }}>
               {reviews.map((_: any, i: number) => (
@@ -299,7 +319,6 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
           )}
         </div>
       ) : (
-        /* Desktop: wrap grid */
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "20px", maxWidth: "1000px", margin: "0 auto" }}>
           {reviews.map((customer: any, i: number) => (
             <Reveal key={customer.id} delay={i * 60} direction="up">
@@ -428,7 +447,7 @@ const Home = () => {
                 renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
               />
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", padding: "0 36px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxWidth: "700px", margin: "0 auto", padding: "0 36px" }}>
                 {[1, 2].map((i) => (
                   <div key={i} className="bg-solea-warm rounded-2xl overflow-hidden border border-border shadow-sm">
                     <div style={{ width: "100%", aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
@@ -481,7 +500,6 @@ const Home = () => {
                 <span style={{ color: "#dc2626", fontSize: "1.2em" }}>🏷️</span>
               </div>
               <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-8">limited time deals — grab them while you can</p>
-              {/* View All */}
               <div className="flex justify-center mb-10">
                 <Link to="/sale" className="no-underline" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 28px", border: "1.5px solid #dc2626", borderRadius: 999, color: "#dc2626", fontFamily: "Georgia, serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", transition: "all 0.2s ease", background: "transparent" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#dc2626"; (e.currentTarget as HTMLElement).style.color = "#fff"; }}
@@ -519,7 +537,6 @@ const Home = () => {
                     <p className="font-serif" style={{ fontSize: "17px", color: "#8B1A2F", lineHeight: 1.9, margin: "0 0 32px 0", maxWidth: "360px" }}>
                       Soléa is a bead embroidery brand specializing in hand-embroidered designs that bring personality and charm to everyday clothing. Drawing inspiration from nostalgia and playful motifs, each Soléa piece is carefully crafted to feel timeless. Our work celebrates slow fashion and individuality.
                     </p>
-                  
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", opacity: 0.45 }}>
                       <span style={{ color: "#8B1A2F", fontSize: "10px" }}>✦</span>
                       <span style={{ color: "#8B1A2F", fontSize: "7px" }}>✦</span>
