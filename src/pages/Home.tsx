@@ -90,7 +90,7 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => {
   );
 };
 
-// ── Spotted Section — fixed mobile dead space, arrows only as wide as needed ──
+// ── Spotted Section — 900px max on web, arrows overlay images on mobile ──────
 const SpottedSection = () => {
   const { data: dbImages = [] } = useSpottedImages();
   const images = dbImages.length > 0 ? dbImages.map((img: any) => img.image) : fallbackSpotted;
@@ -117,10 +117,6 @@ const SpottedSection = () => {
     return { src: images[idx], key: `${idx}-${i}` };
   });
 
-  // On mobile use tighter arrow buttons to eliminate dead space
-  const arrowSize = isMobile ? 32 : 40;
-  const sidePadding = isMobile ? `${arrowSize + 6}px` : "56px";
-
   return (
     <section className="py-20 bg-background">
       <div className="px-8">
@@ -131,32 +127,41 @@ const SpottedSection = () => {
         </div>
         <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">our community wearing their favorites</p>
       </div>
-      <div className="relative w-full" style={{ paddingLeft: sidePadding, paddingRight: sidePadding }}>
-        <button
-          onClick={prev}
-          className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
-          style={{ left: isMobile ? 4 : 8, top: "45%", transform: "translateY(-50%)", width: arrowSize, height: arrowSize }}
-        >
-          <ChevronLeft className="h-5 w-5 text-foreground" />
-        </button>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? "8px" : "16px" }}>
-          {visibleImages.map(({ src, key }) => (
-            <div key={key} onClick={() => setLightboxSrc(src)} style={{ cursor: "pointer", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
-              <img src={src} alt="spotted" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s ease" }}
-                onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.03)")}
-                onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
-              />
-            </div>
-          ))}
+
+      {/* Outer container — 900px cap on desktop, full width on mobile */}
+      <div style={{ maxWidth: isMobile ? "100%" : "900px", margin: "0 auto", padding: isMobile ? "0 12px" : "0 24px" }}>
+        {/* Relative wrapper so arrows are positioned relative to the grid */}
+        <div style={{ position: "relative" }}>
+          {/* Arrows overlap the images — no side padding needed */}
+          <button
+            onClick={prev}
+            className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
+            style={{ left: isMobile ? 6 : -20, top: "45%", transform: "translateY(-50%)", width: isMobile ? 28 : 40, height: isMobile ? 28 : 40 }}
+          >
+            <ChevronLeft style={{ width: isMobile ? 14 : 20, height: isMobile ? 14 : 20 }} className="text-foreground" />
+          </button>
+
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? "8px" : "16px" }}>
+            {visibleImages.map(({ src, key }) => (
+              <div key={key} onClick={() => setLightboxSrc(src)} style={{ cursor: "pointer", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
+                <img src={src} alt="spotted" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s ease" }}
+                  onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.03)")}
+                  onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                />
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={next}
+            className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
+            style={{ right: isMobile ? 6 : -20, top: "45%", transform: "translateY(-50%)", width: isMobile ? 28 : 40, height: isMobile ? 28 : 40 }}
+          >
+            <ChevronRight style={{ width: isMobile ? 14 : 20, height: isMobile ? 14 : 20 }} className="text-foreground" />
+          </button>
         </div>
-        <button
-          onClick={next}
-          className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
-          style={{ right: isMobile ? 4 : 8, top: "45%", transform: "translateY(-50%)", width: arrowSize, height: arrowSize }}
-        >
-          <ChevronRight className="h-5 w-5 text-foreground" />
-        </button>
       </div>
+
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     </section>
   );
@@ -223,8 +228,8 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
 
   if (items.length === 0) return null;
 
-  // On desktop, constrain the carousel width to ~70% of what it was (was full width)
-  const carouselMaxWidth = isMobile ? "100%" : "700px";
+  // Consistent medium width matching Spotted section
+  const carouselMaxWidth = isMobile ? "100%" : "900px";
 
   return (
     <div style={{ maxWidth: carouselMaxWidth, margin: "0 auto", position: "relative", paddingLeft: "36px", paddingRight: "36px" }}>
@@ -447,7 +452,7 @@ const Home = () => {
                 renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
               />
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxWidth: "700px", margin: "0 auto", padding: "0 36px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxWidth: "900px", margin: "0 auto", padding: "0 36px" }}>
                 {[1, 2].map((i) => (
                   <div key={i} className="bg-solea-warm rounded-2xl overflow-hidden border border-border shadow-sm">
                     <div style={{ width: "100%", aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
