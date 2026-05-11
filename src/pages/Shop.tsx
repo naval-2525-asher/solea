@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useProducts, useNewArrivals, useSaleProducts } from "@/hooks/useAdminData";
 import { products as staticProducts } from "@/lib/products";
@@ -80,18 +80,24 @@ const Shop = () => {
   const { data: newArrivalsData = [] } = useNewArrivals();
   const { data: saleData = [] } = useSaleProducts();
 
-  // Default: 2 cols on mobile, 3 cols on desktop
-  const [viewMode, setViewMode] = useState<ViewMode>("triple");
+  // Set initial viewMode based on screen size ONCE — never override after user changes it
+  const initialViewMode = (): ViewMode => (typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
 
+  // Track whether user has manually changed the view
+  const userChangedView = useRef(false);
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    userChangedView.current = true;
+    setViewMode(mode);
+  };
+
+  // Only update viewMode on resize if user hasn't manually changed it
   useEffect(() => {
     const update = () => {
-      if (window.innerWidth < 768) {
-        setViewMode("double");
-      } else {
-        setViewMode("triple");
-      }
+      if (userChangedView.current) return;
+      setViewMode(window.innerWidth < 768 ? "double" : "triple");
     };
-    update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
@@ -151,7 +157,7 @@ const Shop = () => {
             hasFiltersApplied={hasFiltersApplied}
             showSizeFilter={true}
             viewMode={viewMode}
-            onViewModeChange={setViewMode}
+            onViewModeChange={handleViewModeChange}
           />
         )}
         {isLoading ? (
