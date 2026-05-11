@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useProducts, useSaleProducts } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
@@ -37,14 +37,15 @@ const isLowStock = (product: any) => product.stock_status === "low_stock";
 const calcDiscount = (original: number, sale: number) =>
   Math.round(((original - sale) / original) * 100);
 
-const getGridCols = (viewMode: ViewMode) => {
-  if (viewMode === "double") return "grid-cols-1 sm:grid-cols-2";
-  return "grid-cols-2 sm:grid-cols-3";
+const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
+  if (viewMode === "single") return { display: "grid", gridTemplateColumns: "1fr", gap: "16px" };
+  if (viewMode === "double") return { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" };
+  return { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" };
 };
 
 const ProductCard = ({ product, viewMode = "triple", salePrice }: { product: any; viewMode?: ViewMode; salePrice?: number }) => {
   const oos = isOutOfStock(product);
-  const imgHeight = viewMode === "double" ? "400px" : "340px";
+  const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
   const discount = salePrice ? calcDiscount(product.price, salePrice) : null;
   return (
     <Link to={`/accessories/${product.id}`} className="no-underline">
@@ -102,7 +103,25 @@ const Accessories = () => {
   const salePriceMap = Object.fromEntries((saleData as any[]).map((s: any) => [s.product_id, s.sale_price]));
   const dbAccessories = dbProducts.filter((p: any) => p.category === "Accessories");
   const displayProducts = dbAccessories.length > 0 ? dbAccessories : accessoryProductsStatic;
-  const [viewMode, setViewMode] = useState<ViewMode>("triple");
+
+  // Set initial viewMode based on screen size ONCE — never override after user changes it
+  const initialViewMode = (): ViewMode => (typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const userChangedView = useRef(false);
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    userChangedView.current = true;
+    setViewMode(mode);
+  };
+
+  useEffect(() => {
+    const update = () => {
+      if (userChangedView.current) return;
+      setViewMode(window.innerWidth < 768 ? "double" : "triple");
+    };
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const { sortBy, filters, sorted, filtered, maxPrice, hasFiltersApplied, setSortBy, setFilters } =
     useFilterSort(displayProducts, false);
@@ -126,11 +145,11 @@ const Accessories = () => {
             hasFiltersApplied={hasFiltersApplied}
             showSizeFilter={false}
             viewMode={viewMode}
-            onViewModeChange={setViewMode}
+            onViewModeChange={handleViewModeChange}
           />
         )}
         {isLoading ? (
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {[1, 2, 3].map((i) => (
               <div key={i} className="bg-card rounded-lg overflow-hidden border border-border animate-pulse">
                 <div className="h-[340px] bg-secondary/50" />
@@ -142,7 +161,7 @@ const Accessories = () => {
             ))}
           </div>
         ) : sorted.length > 0 ? (
-          <div className={`grid ${getGridCols(viewMode)} gap-4`}>
+          <div style={getGridStyle(viewMode)}>
             {sorted.map((product: any) => (
               <ProductCard key={product.id} product={product} viewMode={viewMode} salePrice={salePriceMap[product.id]} />
             ))}
