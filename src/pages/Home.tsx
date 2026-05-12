@@ -584,10 +584,8 @@ const Home = () => {
         <ReviewsSection reviews={reviews} />
 
         {/* About Us — full bleed stripes edge to edge, curved wave top */}
-        <section style={{ position: "relative", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)", paddingBottom: "72px", marginTop: 0 }}>
-          {/* Wave arch: pseudo-element via inline style tag — bg-colored box with huge border-radius */}
-          <style>{".about-wave::after { content: ''; display: block; position: absolute; bottom: -1px; left: -5%; width: 110%; height: 72px; background: hsl(var(--background)); border-radius: 50% 50% 0 0 / 100% 100% 0 0; }"}</style>
-          <div className="about-wave" style={{ position: "relative", height: "72px", overflow: "visible" }} />
+        <section style={{ position: "relative", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)", paddingBottom: "72px", paddingTop: "48px" }}>
+
           <Reveal direction="up">
             <div className="about-us-content-wrap" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 48px" }}>
               <div className="about-us-grid">
