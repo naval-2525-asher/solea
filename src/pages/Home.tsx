@@ -419,6 +419,7 @@ const Home = () => {
           .about-us-grid { grid-template-columns: 1fr; }
           .about-us-text { padding-right: 0 !important; padding-bottom: 32px; }
           .about-us-heading { font-size: 72px !important; }
+          .about-us-content-wrap { padding: 8px 20px 0 !important; }
         }
       `}</style>
 
@@ -568,31 +569,37 @@ const Home = () => {
         {/* Happy Customers */}
         <ReviewsSection reviews={reviews} />
 
-        {/* About Us */}
-        <section className="bg-background py-16 px-8">
+        {/* About Us — full bleed stripes edge to edge, curved wave top */}
+        <section style={{ position: "relative", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)", paddingBottom: "72px", marginTop: 0 }}>
+          {/* Wave: a box the same color as the page bg above the stripes, clipped to a curve at the bottom */}
+          <div style={{
+            height: "80px",
+            background: "hsl(var(--background))",
+            clipPath: "ellipse(60% 100% at 50% 0%)",
+            WebkitClipPath: "ellipse(60% 100% at 50% 0%)",
+            width: "100%",
+          }} />
           <Reveal direction="up">
-            <div className="max-w-[1100px] mx-auto rounded-3xl overflow-hidden" style={{ background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)" }}>
-              <div style={{ padding: "56px 48px 56px" }}>
-                <div className="about-us-grid">
-                  <div className="about-us-text" style={{ paddingTop: "16px", paddingRight: "48px", position: "relative", zIndex: 2 }}>
-                    <h2 className="about-us-heading font-serif" style={{ fontSize: "clamp(52px, 5vw, 90px)", fontWeight: 900, color: "#8B1A2F", lineHeight: 0.92, margin: "0 0 32px 0", letterSpacing: "-0.02em" }}>About<br />Us</h2>
-                    <div style={{ width: "48px", height: "2px", background: "#8B1A2F", opacity: 0.35, borderRadius: "2px", marginBottom: "28px" }} />
-                    <p className="font-serif" style={{ fontSize: "17px", color: "#8B1A2F", lineHeight: 1.9, margin: "0 0 32px 0", maxWidth: "360px" }}>
-                      Soléa is a bead embroidery brand specializing in hand-embroidered designs that bring personality and charm to everyday clothing. Drawing inspiration from nostalgia and playful motifs, each Soléa piece is carefully crafted to feel timeless. Our work celebrates slow fashion and individuality.
-                    </p>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", opacity: 0.45 }}>
-                      <span style={{ color: "#8B1A2F", fontSize: "10px" }}>✦</span>
-                      <span style={{ color: "#8B1A2F", fontSize: "7px" }}>✦</span>
-                      <span style={{ color: "#8B1A2F", fontSize: "10px" }}>✦</span>
-                    </div>
+            <div className="about-us-content-wrap" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 48px" }}>
+              <div className="about-us-grid">
+                <div className="about-us-text" style={{ paddingTop: "16px", paddingRight: "48px", position: "relative", zIndex: 2 }}>
+                  <h2 className="about-us-heading font-serif" style={{ fontSize: "clamp(52px, 5vw, 90px)", fontWeight: 900, color: "#8B1A2F", lineHeight: 0.92, margin: "0 0 32px 0", letterSpacing: "-0.02em" }}>About<br />Us</h2>
+                  <div style={{ width: "48px", height: "2px", background: "#8B1A2F", opacity: 0.35, borderRadius: "2px", marginBottom: "28px" }} />
+                  <p className="font-serif" style={{ fontSize: "17px", color: "#8B1A2F", lineHeight: 1.9, margin: "0 0 32px 0", maxWidth: "360px" }}>
+                    Soléa is a bead embroidery brand specializing in hand-embroidered designs that bring personality and charm to everyday clothing. Drawing inspiration from nostalgia and playful motifs, each Soléa piece is carefully crafted to feel timeless. Our work celebrates slow fashion and individuality.
+                  </p>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", opacity: 0.45 }}>
+                    <span style={{ color: "#8B1A2F", fontSize: "10px" }}>✦</span>
+                    <span style={{ color: "#8B1A2F", fontSize: "7px" }}>✦</span>
+                    <span style={{ color: "#8B1A2F", fontSize: "10px" }}>✦</span>
                   </div>
-                  <div className="about-us-image" style={{ marginTop: "-20px", position: "relative" }}>
-                    <div style={{ position: "absolute", inset: 0, border: "1.5px dashed #8B1A2F", borderRadius: "24px", opacity: 0.25, transform: "translate(10px, 10px)", pointerEvents: "none" }} />
-                    <img src="/about-us.jpg" alt="Soléa — art you can wear"
-                      onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith(".png")) t.src = "/images/about/about-us.png"; }}
-                      style={{ width: "100%", height: "480px", objectFit: "cover", borderRadius: "20px", display: "block", position: "relative", zIndex: 1 }}
-                    />
-                  </div>
+                </div>
+                <div className="about-us-image" style={{ marginTop: "-20px", position: "relative" }}>
+                  <div style={{ position: "absolute", inset: 0, border: "1.5px dashed #8B1A2F", borderRadius: "24px", opacity: 0.25, transform: "translate(10px, 10px)", pointerEvents: "none" }} />
+                  <img src="/about-us.jpg" alt="Soléa — art you can wear"
+                    onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith(".png")) t.src = "/images/about/about-us.png"; }}
+                    style={{ width: "100%", height: "480px", objectFit: "cover", borderRadius: "20px", display: "block", position: "relative", zIndex: 1 }}
+                  />
                 </div>
               </div>
             </div>
