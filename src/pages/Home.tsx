@@ -128,9 +128,9 @@ const SpottedSection = () => {
     <section className="py-20 bg-background">
       <div className="px-8">
         <div className="flex items-center justify-center gap-4 mb-2">
-          <DecorativeLine side="left" />
+          {!isMobile && <DecorativeLine side="left" />}
           <h2 className="text-foreground font-serif text-4xl font-black whitespace-nowrap">Spotted in soléa</h2>
-          <DecorativeLine side="right" />
+          {!isMobile && <DecorativeLine side="right" />}
         </div>
         <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">our community wearing their favorites</p>
       </div>
@@ -148,15 +148,29 @@ const SpottedSection = () => {
 
           {/* Image grid */}
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? "8px" : "16px" }}>
-            {visibleImages.map(({ src, key }) => (
-              <div key={key} onClick={() => setLightboxSrc(src)} style={{ cursor: "pointer", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
+            {visibleImages.map(({ src, key }, gridIdx) => (
+              <div key={key} style={{ position: "relative", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
                 <img
                   src={src}
                   alt="spotted"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s ease" }}
+                  onClick={() => setLightboxSrc(src)}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer", transition: "transform 0.3s ease" }}
                   onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.03)")}
                   onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
                 />
+                {/* Mobile tap arrows — left on first col, right on last col */}
+                {isMobile && gridIdx === 0 && (
+                  <button onClick={(e) => { e.stopPropagation(); prev(); }}
+                    style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.82)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.15)", zIndex: 5 }}>
+                    <ChevronLeft style={{ width: 14, height: 14, color: "#8B1A2F" }} />
+                  </button>
+                )}
+                {isMobile && gridIdx === cols - 1 && (
+                  <button onClick={(e) => { e.stopPropagation(); next(); }}
+                    style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.82)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.15)", zIndex: 5 }}>
+                    <ChevronRight style={{ width: 14, height: 14, color: "#8B1A2F" }} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -571,15 +585,9 @@ const Home = () => {
 
         {/* About Us — full bleed stripes edge to edge, curved wave top */}
         <section style={{ position: "relative", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)", paddingBottom: "72px", marginTop: 0 }}>
-          {/* Gentle arch wave — wide oversized div with bottom border-radius curves naturally */}
-          <div style={{
-            height: "80px",
-            background: "hsl(var(--background))",
-            borderBottomLeftRadius: "50% 100%",
-            borderBottomRightRadius: "50% 100%",
-            width: "120%",
-            marginLeft: "-10%",
-          }} />
+          {/* Wave arch: pseudo-element via inline style tag — bg-colored box with huge border-radius */}
+          <style>{".about-wave::after { content: ''; display: block; position: absolute; bottom: -1px; left: -5%; width: 110%; height: 72px; background: hsl(var(--background)); border-radius: 50% 50% 0 0 / 100% 100% 0 0; }"}</style>
+          <div className="about-wave" style={{ position: "relative", height: "72px", overflow: "visible" }} />
           <Reveal direction="up">
             <div className="about-us-content-wrap" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 48px" }}>
               <div className="about-us-grid">
