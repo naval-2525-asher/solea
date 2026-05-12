@@ -90,7 +90,9 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => {
   );
 };
 
-// ── Spotted Section — 900px max on web, arrows overlay images on mobile ──────
+// ── Spotted Section ───────────────────────────────────────────────────────────
+// Desktop: arrow nav, 1000px wide (matches Shop by Category)
+// Mobile:  no arrows (zero dead space), cute 🌸 dot nav below
 const SpottedSection = () => {
   const { data: dbImages = [] } = useSpottedImages();
   const images = dbImages.length > 0 ? dbImages.map((img: any) => img.image) : fallbackSpotted;
@@ -110,8 +112,13 @@ const SpottedSection = () => {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  const prev = () => setStartIndex((i) => (i - 1 + images.length) % images.length);
-  const next = () => setStartIndex((i) => (i + 1) % images.length);
+  const totalPages = Math.ceil(images.length / cols);
+  const currentPage = Math.floor(startIndex / cols) % totalPages;
+
+  const goTo = (page: number) => setStartIndex(page * cols);
+  const prev = () => goTo((currentPage - 1 + totalPages) % totalPages);
+  const next = () => goTo((currentPage + 1) % totalPages);
+
   const visibleImages = Array.from({ length: cols }, (_, i) => {
     const idx = (startIndex + i) % images.length;
     return { src: images[idx], key: `${idx}-${i}` };
@@ -128,23 +135,25 @@ const SpottedSection = () => {
         <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">our community wearing their favorites</p>
       </div>
 
-      {/* Outer container — 900px cap on desktop, full width on mobile */}
-      <div style={{ maxWidth: isMobile ? "100%" : "900px", margin: "0 auto", padding: isMobile ? "0 12px" : "0 24px" }}>
-        {/* Relative wrapper so arrows are positioned relative to the grid */}
+      {/* Container — 1000px on desktop (same as Shop by Category), full width on mobile */}
+      <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto", padding: isMobile ? "0 12px" : "0 32px" }}>
         <div style={{ position: "relative" }}>
-          {/* Arrows overlap the images — no side padding needed */}
-          <button
-            onClick={prev}
-            className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
-            style={{ left: isMobile ? 6 : -20, top: "45%", transform: "translateY(-50%)", width: isMobile ? 28 : 40, height: isMobile ? 28 : 40 }}
-          >
-            <ChevronLeft style={{ width: isMobile ? 14 : 20, height: isMobile ? 14 : 20 }} className="text-foreground" />
-          </button>
 
+          {/* ← Desktop arrow only */}
+          {!isMobile && (
+            <button onClick={prev} className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors" style={{ left: -28, top: "45%", transform: "translateY(-50%)", width: 40, height: 40 }}>
+              <ChevronLeft className="h-5 w-5 text-foreground" />
+            </button>
+          )}
+
+          {/* Image grid */}
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? "8px" : "16px" }}>
             {visibleImages.map(({ src, key }) => (
               <div key={key} onClick={() => setLightboxSrc(src)} style={{ cursor: "pointer", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
-                <img src={src} alt="spotted" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s ease" }}
+                <img
+                  src={src}
+                  alt="spotted"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s ease" }}
                   onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.03)")}
                   onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
                 />
@@ -152,14 +161,34 @@ const SpottedSection = () => {
             ))}
           </div>
 
-          <button
-            onClick={next}
-            className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors"
-            style={{ right: isMobile ? 6 : -20, top: "45%", transform: "translateY(-50%)", width: isMobile ? 28 : 40, height: isMobile ? 28 : 40 }}
-          >
-            <ChevronRight style={{ width: isMobile ? 14 : 20, height: isMobile ? 14 : 20 }} className="text-foreground" />
-          </button>
+          {/* → Desktop arrow only */}
+          {!isMobile && (
+            <button onClick={next} className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors" style={{ right: -28, top: "45%", transform: "translateY(-50%)", width: 40, height: 40 }}>
+              <ChevronRight className="h-5 w-5 text-foreground" />
+            </button>
+          )}
         </div>
+
+        {/* 🌸 Mobile dot nav — no arrows, zero dead space */}
+        {isMobile && totalPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18 }}>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1,
+                  fontSize: i === currentPage ? 20 : 14,
+                  opacity: i === currentPage ? 1 : 0.3,
+                  transform: i === currentPage ? "scale(1.15)" : "scale(1)",
+                  transition: "all 0.25s ease",
+                }}
+              >
+                🌸
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
@@ -167,7 +196,7 @@ const SpottedSection = () => {
   );
 };
 
-// ── Product Card — 30% smaller on desktop via maxWidth cap ───────────────────
+// ── Product Card ──────────────────────────────────────────────────────────────
 const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number }) => {
   const href = product.category === "Accessories" || product.category === "Bagcharms"
     ? `/accessories/${product.id}` : `/product/${product.id}`;
@@ -204,7 +233,9 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
   );
 };
 
-// ── Horizontal Product Carousel — desktop cards capped at 70% of original size
+// ── Product Carousel ─────────────────────────────────────────────────────────
+// Desktop: arrow nav + dots, 1000px (matches Shop by Category)
+// Mobile:  no arrows (zero dead space), dots only
 const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (item: any, i: number) => React.ReactNode }) => {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(3);
@@ -228,40 +259,33 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
 
   if (items.length === 0) return null;
 
-  // Consistent medium width matching Spotted section
-  const carouselMaxWidth = isMobile ? "100%" : "900px";
-
   return (
-    <div style={{ maxWidth: carouselMaxWidth, margin: "0 auto", position: "relative", paddingLeft: "36px", paddingRight: "36px" }}>
-      {/* Prev */}
-      <button
-        onClick={() => setPage((p) => Math.max(0, p - 1))}
-        disabled={page === 0}
-        className="absolute left-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        style={{ top: "38%", transform: "translateY(-50%)" }}
-      >
-        <ChevronLeft className="h-4 w-4 text-foreground" />
-      </button>
-
-      {/* Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "10px" }}>
-        {visibleItems.map((item, i) => renderCard(item, i))}
-        {Array.from({ length: perPage - visibleItems.length }).map((_, i) => <div key={`e-${i}`} />)}
+    <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto" }}>
+      <div style={{ position: "relative", paddingLeft: isMobile ? "12px" : "52px", paddingRight: isMobile ? "12px" : "52px" }}>
+        {/* ← Desktop only */}
+        {!isMobile && (
+          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+            className="absolute left-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ top: "38%", transform: "translateY(-50%)" }}>
+            <ChevronLeft className="h-4 w-4 text-foreground" />
+          </button>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "12px" }}>
+          {visibleItems.map((item, i) => renderCard(item, i))}
+          {Array.from({ length: perPage - visibleItems.length }).map((_, i) => <div key={`e-${i}`} />)}
+        </div>
+        {/* → Desktop only */}
+        {!isMobile && (
+          <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+            className="absolute right-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ top: "38%", transform: "translateY(-50%)" }}>
+            <ChevronRight className="h-4 w-4 text-foreground" />
+          </button>
+        )}
       </div>
-
-      {/* Next */}
-      <button
-        onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-        disabled={page >= totalPages - 1}
-        className="absolute right-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        style={{ top: "38%", transform: "translateY(-50%)" }}
-      >
-        <ChevronRight className="h-4 w-4 text-foreground" />
-      </button>
-
-      {/* Dots */}
+      {/* Dots — both, but sole nav on mobile */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 24 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20 }}>
           {Array.from({ length: totalPages }).map((_, i) => (
             <button key={i} onClick={() => setPage(i)} style={{ width: i === page ? 24 : 8, height: 8, borderRadius: 4, border: "none", background: i === page ? "#8B1A2F" : "#d1a0a8", cursor: "pointer", transition: "all 0.3s ease", padding: 0 }} />
           ))}
@@ -271,10 +295,11 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
   );
 };
 
-// ── Reviews Section — carousel on mobile, grid on desktop ────────────────────
+// ── Reviews Section ───────────────────────────────────────────────────────────
 const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
   const [isMobile, setIsMobile] = useState(false);
   const [reviewPage, setReviewPage] = useState(0);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768);
@@ -292,28 +317,31 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
   }, [isMobile, reviews.length]);
 
   const ReviewCard = ({ customer }: { customer: any }) => (
-    <div className="review-card" style={{ padding: "48px 40px", minHeight: 160, position: "relative", overflow: "hidden" }}>
+    <div className="review-card" style={{ padding: "40px 36px", minHeight: 150, position: "relative", overflow: "hidden" }}>
       <span style={{ position: "absolute", top: 4, left: 12, fontFamily: "serif", fontSize: 80, lineHeight: 1, color: "hsl(var(--solea-rose) / 0.2)", userSelect: "none", pointerEvents: "none" }}>"</span>
       <span style={{ position: "absolute", bottom: 0, right: 12, fontFamily: "serif", fontSize: 80, lineHeight: 1, color: "hsl(var(--solea-rose) / 0.2)", userSelect: "none", pointerEvents: "none" }}>"</span>
       <p className="text-foreground font-serif text-base leading-relaxed italic" style={{ opacity: 0.85, position: "relative", zIndex: 1 }}>{customer.review_text}</p>
     </div>
   );
 
+  // Desktop: first 4 reviews in 2×2, then "View All" to expand
+  const desktopVisible = showAll ? reviews : reviews.slice(0, 4);
+  const hasMore = reviews.length > 4;
+
   return (
     <section className="py-20 px-8 bg-background">
       <Reveal>
         <div className="text-center mb-12">
-          <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Happy Customers </h2>
+          <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Happy Customers</h2>
           <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-1">reviews from our DMs</p>
         </div>
       </Reveal>
 
       {isMobile ? (
-        <div style={{ maxWidth: 500, margin: "0 auto", padding: "0 16px" }}>
+        /* Mobile: single auto-advance card */
+        <div style={{ maxWidth: 500, margin: "0 auto", padding: "0 4px" }}>
           <div style={{ overflow: "hidden", borderRadius: 20 }}>
-            {reviews.length > 0 && (
-              <ReviewCard customer={reviews[reviewPage]} />
-            )}
+            {reviews.length > 0 && <ReviewCard customer={reviews[reviewPage]} />}
           </div>
           {reviews.length > 1 && (
             <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 20 }}>
@@ -324,14 +352,28 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
           )}
         </div>
       ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "20px", maxWidth: "1000px", margin: "0 auto" }}>
-          {reviews.map((customer: any, i: number) => (
-            <Reveal key={customer.id} delay={i * 60} direction="up">
-              <div style={{ minWidth: "240px", maxWidth: "410px", flex: "1 1 250px" }}>
+        /* Desktop: 2×2 grid showing 4, expand on demand */
+        <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
+            {desktopVisible.map((customer: any, i: number) => (
+              <Reveal key={customer.id} delay={i * 60} direction="up">
                 <ReviewCard customer={customer} />
-              </div>
-            </Reveal>
-          ))}
+              </Reveal>
+            ))}
+          </div>
+          {/* View All / Show Less */}
+          {hasMore && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 32 }}>
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 32px", border: "1.5px solid #8B1A2F", borderRadius: 999, color: "#8B1A2F", fontFamily: "Georgia, serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", background: "transparent", cursor: "pointer", transition: "all 0.2s ease" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#8B1A2F"; (e.currentTarget as HTMLElement).style.color = "#fff"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "#8B1A2F"; }}
+              >
+                {showAll ? "Show Less" : `View All ${reviews.length} Reviews`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -414,7 +456,7 @@ const Home = () => {
           )}
         </section>
 
-        {/* Shop by Category */}
+        {/* Shop by Category — max-w-[1000px] */}
         <section className="py-20 px-8 bg-background">
           <Reveal>
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Shop by Category</h2>
@@ -439,31 +481,29 @@ const Home = () => {
           </div>
         </section>
 
-        {/* ── Best Sellers Carousel ── */}
-        <section className="py-16 bg-background" style={{ paddingLeft: "12px", paddingRight: "12px" }}>
+        {/* Best Sellers — 1000px, same as Shop by Category */}
+        <section className="py-16 bg-background">
           <Reveal>
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Best Sellers</h2>
             <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">⁺₊⋆ our most loved pieces ⋆⁺₊</p>
           </Reveal>
-          <div>
-            {validBestSellers.length > 0 ? (
-              <ProductCarousel
-                items={validBestSellers}
-                renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
-              />
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxWidth: "900px", margin: "0 auto", padding: "0 36px" }}>
-                {[1, 2].map((i) => (
-                  <div key={i} className="bg-solea-warm rounded-2xl overflow-hidden border border-border shadow-sm">
-                    <div style={{ width: "100%", aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
-                      <span className="text-3xl">🪡</span>
-                    </div>
-                    <div className="p-3"><p className="text-foreground font-serif font-bold text-sm">Coming Soon</p><p className="text-foreground font-serif text-xs opacity-70 mt-1">PKR —</p></div>
+          {validBestSellers.length > 0 ? (
+            <ProductCarousel
+              items={validBestSellers}
+              renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
+            />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", maxWidth: "1000px", margin: "0 auto", padding: "0 48px" }}>
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-solea-warm rounded-2xl overflow-hidden border border-border shadow-sm">
+                  <div style={{ width: "100%", aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
+                    <span className="text-3xl">🪡</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <div className="p-3"><p className="text-foreground font-serif font-bold text-sm">Coming Soon</p><p className="text-foreground font-serif text-xs opacity-70 mt-1">PKR —</p></div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* New Arrivals */}
@@ -495,9 +535,9 @@ const Home = () => {
           </Reveal>
         </section>
 
-        {/* ── On Sale Carousel ── */}
+        {/* On Sale — 1000px, same as Shop by Category */}
         {validSaleItems.length > 0 && (
-          <section className="py-16 bg-background" style={{ paddingLeft: "12px", paddingRight: "12px" }}>
+          <section className="py-16 bg-background">
             <Reveal>
               <div className="flex items-center justify-center gap-3 mb-2">
                 <span style={{ color: "#dc2626", fontSize: "1.2em" }}>🏷️</span>
@@ -513,12 +553,10 @@ const Home = () => {
                 </Link>
               </div>
             </Reveal>
-            <div>
-              <ProductCarousel
-                items={validSaleItems}
-                renderCard={(s, i) => <ProductCard key={s.id} product={s.products} salePrice={s.sale_price} />}
-              />
-            </div>
+            <ProductCarousel
+              items={validSaleItems}
+              renderCard={(s, i) => <ProductCard key={s.id} product={s.products} salePrice={s.sale_price} />}
+            />
           </section>
         )}
 
