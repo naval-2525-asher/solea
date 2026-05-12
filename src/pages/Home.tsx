@@ -571,13 +571,14 @@ const Home = () => {
 
         {/* About Us — full bleed stripes edge to edge, curved wave top */}
         <section style={{ position: "relative", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)", paddingBottom: "72px", marginTop: 0 }}>
-          {/* Wave: a box the same color as the page bg above the stripes, clipped to a curve at the bottom */}
+          {/* Gentle arch wave — wide oversized div with bottom border-radius curves naturally */}
           <div style={{
             height: "80px",
             background: "hsl(var(--background))",
-            clipPath: "ellipse(60% 100% at 50% 0%)",
-            WebkitClipPath: "ellipse(60% 100% at 50% 0%)",
-            width: "100%",
+            borderBottomLeftRadius: "50% 100%",
+            borderBottomRightRadius: "50% 100%",
+            width: "120%",
+            marginLeft: "-10%",
           }} />
           <Reveal direction="up">
             <div className="about-us-content-wrap" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 48px" }}>
