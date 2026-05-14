@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useSaleProducts } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { useRegion } from "@/context/RegionContext";
 
 const isOutOfStock = (product: any) =>
   product.stock_status === "out_of_stock" || product.stock_status === "Out of Stock";
@@ -13,6 +14,7 @@ const SaleCard = ({ item }: { item: any }) => {
   const product = item.products;
   const oos = isOutOfStock(product);
   const discount = calcDiscount(product.price, item.sale_price);
+  const { formatPrice, region } = useRegion();
   const href =
     product.category === "Accessories" || product.category === "Bagcharms"
       ? `/accessories/${product.id}`
@@ -63,10 +65,10 @@ const SaleCard = ({ item }: { item: any }) => {
           <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>
-              PKR {product.price?.toLocaleString()}
+              {formatPrice(product.price, product.price_gbp)}
             </p>
             <p className="text-foreground font-serif text-xs font-bold">
-              PKR {Number(item.sale_price).toLocaleString()}
+              {region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(item.sale_price).toLocaleString()}`}
             </p>
           </div>
         </div>

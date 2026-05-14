@@ -3,9 +3,20 @@ import { useCart, cartItemKey } from "@/context/CartContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { useRegion } from "@/context/RegionContext";
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice } = useCart();
+  const { formatPrice, regionConfig } = useRegion();
+
+  // Cart items store price in the active region's currency at time of add
+  // We display using the region's symbol
+  const formatCartPrice = (price: number) => {
+    if (regionConfig.code === "UK") {
+      return `£${price.toLocaleString("en-GB")}`;
+    }
+    return `Rs. ${price.toLocaleString()}`;
+  };
 
   if (items.length === 0) {
     return (
@@ -72,7 +83,7 @@ const Cart = () => {
                   )}
 
                   <p className="text-foreground font-serif font-bold text-sm mt-1.5">
-                    PKR {item.price.toLocaleString()}
+                    {formatCartPrice(item.price)}
                   </p>
 
                   <div className="flex items-center gap-3 mt-2">
@@ -100,11 +111,11 @@ const Cart = () => {
         <div className="border-t border-border pt-6 space-y-2">
           <div className="flex justify-between font-serif text-sm text-foreground/70">
             <span>Estimated Total</span>
-            <span>PKR {totalPrice.toLocaleString()}</span>
+            <span>{formatCartPrice(totalPrice)}</span>
           </div>
           <div className="flex justify-between font-serif text-lg font-black text-foreground">
             <span>Total</span>
-            <span>PKR {totalPrice.toLocaleString()}</span>
+            <span>{formatCartPrice(totalPrice)}</span>
           </div>
         </div>
 

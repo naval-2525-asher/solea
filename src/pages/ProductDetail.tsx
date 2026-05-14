@@ -9,6 +9,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useSaleProducts } from "@/hooks/useAdminData";
+import { useRegion } from "@/context/RegionContext";
 
 type VariantOption = { label: string; name: string; price_diff: number };
 type CustomInput = {
@@ -65,6 +66,7 @@ const ProductDetail = () => {
 
   // Sale data — must be before any early returns (React rules of hooks)
   const { data: saleData = [] } = useSaleProducts();
+  const { region, formatPrice } = useRegion();
 
   if (isLoading) {
     return (
@@ -185,11 +187,15 @@ const ProductDetail = () => {
       }
     });
 
+    const regionPrice = region === "UK"
+      ? ((dbProduct?.price_gbp ?? 0) + extraPrice)
+      : (salePrice ?? displayPrice);
+
     addToCart({
       productId: typeof product.id === "number" ? product.id : 9999,
       name: product.name,
       image: allImages[0] || (product as any).image || "",
-      price: salePrice ?? displayPrice,
+      price: regionPrice,
       size: selectedSize || "One Size",
       style: isTeeProduct ? selectedType : "tee",
       customisation: Object.keys(customisation).length > 0 ? customisation : undefined,
@@ -305,19 +311,24 @@ const ProductDetail = () => {
           {salePrice ? (
             <div className="flex items-center gap-3 mb-8">
               <p className="text-foreground font-serif text-2xl font-bold">
-                PKR {salePrice.toLocaleString()}
+                {region === "UK"
+                  ? `£${((dbProduct?.price_gbp ?? 0) + extraPrice).toLocaleString("en-GB")}`
+                  : `Rs. ${salePrice.toLocaleString()}`}
               </p>
               <p className="font-serif text-lg" style={{ textDecoration: "line-through", opacity: 0.45 }}>
-                PKR {displayPrice.toLocaleString()}
+                {formatPrice(displayPrice, dbProduct?.price_gbp ?? 0)}
               </p>
-              <span style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "3px 10px", borderRadius: "2rem" }}>
-                -{discount}%
-              </span>
+              {region === "PK" && (
+                <span style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "3px 10px", borderRadius: "2rem" }}>
+                  -{discount}%
+                </span>
+              )}
             </div>
           ) : (
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
-              PKR {displayPrice.toLocaleString()}
-              {extraPrice > 0 && <span className="text-sm font-normal text-muted-foreground ml-2">(+PKR {extraPrice.toLocaleString()} for selected option)</span>}
+              {formatPrice(displayPrice, (dbProduct?.price_gbp ?? 0) + extraPrice)}
+              {extraPrice > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPrice.toLocaleString()} for selected option)</span>}
+              {extraPrice > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPrice.toLocaleString("en-GB")} for selected option)</span>}
             </p>
           )}
 
@@ -391,7 +402,7 @@ const ProductDetail = () => {
                       <button key={opt.name}
                         onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
                         style={{ padding: "0.4rem 1rem", borderRadius: "2rem", fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", transition: "all 0.15s", border: "2px solid", borderColor: isSelected ? "hsl(var(--primary))" : "hsl(var(--border))", background: isSelected ? "hsl(var(--primary))" : "transparent", color: isSelected ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
-                        {opt.name}{opt.price_diff !== 0 && <span style={{ fontSize: "0.68rem", marginLeft: 4, opacity: 0.75 }}>+PKR {opt.price_diff}</span>}
+                        {opt.name}{opt.price_diff !== 0 && <span style={{ fontSize: "0.68rem", marginLeft: 4, opacity: 0.75 }}>{region === "UK" ? `+£${opt.price_diff}` : `+Rs. ${opt.price_diff}`}</span>}
                       </button>
                     );
                   })}

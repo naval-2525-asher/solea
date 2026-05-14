@@ -39,7 +39,7 @@ const STOCK_STATUSES = ["in_stock", "low_stock", "out_of_stock"];
 const INPUT_TYPES: CustomInput["type"][] = ["text", "date", "color", "select"];
 
 const emptyProduct = {
-  name: "", description: "", price: 0, category: "Tees & Tank Tops",
+  name: "", description: "", price: 0, price_gbp: 0, category: "Tees & Tank Tops",
   image: "", images: [] as string[], sizes: [] as string[],
   available_as: [] as string[], product_tags: [] as string[],
   stock_status: "in_stock", display_order: 0,
@@ -234,6 +234,7 @@ export default function AdminProducts() {
               <h3 className="font-serif font-bold text-foreground text-sm">{p.name}</h3>
               <p className="font-serif text-xs text-muted-foreground capitalize">{p.category}</p>
               <p className="font-serif text-foreground font-black">PKR {p.price.toLocaleString()}</p>
+              {p.price_gbp ? <p className="font-serif text-muted-foreground text-xs">£{Number(p.price_gbp).toLocaleString("en-GB")} GBP</p> : <p className="font-serif text-muted-foreground text-xs opacity-50">GBP not set</p>}
               <div className="flex flex-wrap gap-1">
                 {p.sizes?.map((s: string) => (
                   <span key={s} className="font-serif text-[10px] px-2 py-0.5 bg-secondary rounded-full text-foreground/70">{s}</span>
@@ -297,9 +298,25 @@ export default function AdminProducts() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="font-serif text-xs">Price (PKR)</Label>
+                  <Label className="font-serif text-xs">Price (PKR 🇵🇰)</Label>
                   <Input type="number" value={editProduct.price} onChange={(e) => setEditProduct({ ...editProduct, price: Number(e.target.value) })} className="font-serif text-sm" />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="font-serif text-xs">Price (GBP 🇬🇧) <span className="text-muted-foreground font-normal">— UK region pricing</span></Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-serif text-sm text-muted-foreground">£</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editProduct.price_gbp ?? 0}
+                    onChange={(e) => setEditProduct({ ...editProduct, price_gbp: Number(e.target.value) })}
+                    className="font-serif text-sm pl-7"
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className="font-serif text-[10px] text-muted-foreground">Defaults to £0 — set to display UK pricing to customers</p>
               </div>
 
               <div className="space-y-1">

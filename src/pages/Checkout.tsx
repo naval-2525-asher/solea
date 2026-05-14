@@ -5,10 +5,16 @@ import Footer from "@/components/Footer";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Paperclip, CheckCircle2, Lock } from "lucide-react";
+import { useRegion } from "@/context/RegionContext";
 
 const Checkout = () => {
   const { items, totalPrice, clearCart } = useCart();
   const navigate = useNavigate();
+  const { region, regionConfig } = useRegion();
+  const isUK = region === "UK";
+
+  const formatCheckoutPrice = (price: number) =>
+    isUK ? `£${price.toLocaleString("en-GB")}` : `PKR ${price.toLocaleString()}`;
 
   // Payment proof state
   const [txnImage, setTxnImage] = useState<File | null>(null);
@@ -24,7 +30,8 @@ const Checkout = () => {
     phone: "",
     address: "",
     city: "",
-    province: "",
+    province: "",   // PK only
+    postcode: "",   // UK only
   });
 
   const paymentDone = txnImage !== null && txnId.trim().length > 0;
@@ -61,7 +68,7 @@ const Checkout = () => {
       !form.phone ||
       !form.address ||
       !form.city ||
-      !form.province
+      (isUK ? !form.postcode : !form.province)
     ) {
       toast({ title: "Please fill in all shipping details", variant: "destructive" });
       return;
@@ -110,7 +117,22 @@ const Checkout = () => {
           </p>
         </div>
 
-        {/* Bank Details */}
+        {/* Bank Details — PK only / Stripe placeholder for UK */}
+        {isUK ? (
+          <div className="bg-card border border-border rounded-xl p-6 mb-8">
+            <h2 className="text-foreground font-serif font-black text-lg mb-1">
+              Payment
+            </h2>
+            <div className="border-t border-border my-3" />
+            <p className="text-foreground/80 font-serif text-sm leading-relaxed">
+              UK payments are processed via bank transfer. Please contact us at{" "}
+              <span className="font-bold">solea.uk@email.com</span> to arrange payment before completing your order.
+            </p>
+            <div className="mt-4 bg-secondary/40 rounded-xl p-4 font-serif text-sm text-foreground/70">
+              <p>All prices are in <span className="font-bold text-foreground">GBP (£)</span>. Your order total will be confirmed via email.</p>
+            </div>
+          </div>
+        ) : (
         <div className="bg-card border border-border rounded-xl p-6 mb-8">
           <h2 className="text-foreground font-serif font-black text-lg mb-1">
             Bank Deposit
@@ -141,6 +163,7 @@ const Checkout = () => {
             </p>
           </div>
         </div>
+        )}
 
         {/* Order Summary */}
         <div className="bg-card border border-border rounded-xl p-6 mb-8">
@@ -157,7 +180,7 @@ const Checkout = () => {
                   {item.name} · {item.size} × {item.quantity}
                 </span>
                 <span className="text-foreground font-bold">
-                  PKR {(item.price * item.quantity).toLocaleString()}
+                  {formatCheckoutPrice(item.price * item.quantity)}
                 </span>
               </div>
             ))}
@@ -165,7 +188,7 @@ const Checkout = () => {
           <div className="border-t border-border my-3" />
           <div className="flex justify-between font-serif text-lg font-black text-foreground">
             <span>Total</span>
-            <span>PKR {totalPrice.toLocaleString()}</span>
+            <span>{formatCheckoutPrice(totalPrice)}</span>
           </div>
         </div>
 
@@ -317,6 +340,16 @@ const Checkout = () => {
               disabled={!paymentDone}
               className={paymentDone ? inputEnabled : inputDisabled}
             />
+            {isUK ? (
+              <input
+                name="postcode"
+                placeholder="Postcode (e.g. SW1A 1AA)"
+                value={form.postcode}
+                onChange={handleChange}
+                disabled={!paymentDone}
+                className={paymentDone ? inputEnabled : inputDisabled}
+              />
+            ) : (
             <select
               name="province"
               value={form.province}
@@ -335,6 +368,7 @@ const Checkout = () => {
                 </option>
               ))}
             </select>
+            )}
           </div>
 
           <button

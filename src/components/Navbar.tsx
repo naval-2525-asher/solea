@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, Search, ArrowRight, ChevronRight, ShoppingBag } from "lucide-react";
+import { Menu, X, Search, ArrowRight, ChevronRight, ShoppingBag, ChevronDown } from "lucide-react";
 import { products } from "@/lib/products";
 import { useCart } from "@/context/CartContext";
 import { useSiteSettings } from "@/hooks/useAdminData";
+import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
 const policies = [
   { key: "refund", label: "Refunds & Exchange Policy", image: "/refund.jpg" },
@@ -24,8 +25,71 @@ const AnnouncementBar = () => {
   );
 };
 
+const FlagImg = ({ code, size = 20 }: { code: string; size?: number }) => {
+  // code: "PK" | "UK" — flagcdn uses lowercase ISO alpha-2; UK region = GB
+  const iso = code === "UK" ? "gb" : code.toLowerCase();
+  return (
+    <img
+      src={`https://flagcdn.com/w40/${iso}.png`}
+      width={size}
+      height={size * 0.67}
+      alt={code}
+      style={{ borderRadius: 3, objectFit: "cover", display: "inline-block", flexShrink: 0 }}
+    />
+  );
+};
+
+const RegionSelector: React.FC = () => {
+  const { region, setRegion, regionConfig } = useRegion();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-1.5 bg-white/40 backdrop-blur-sm border-none cursor-pointer px-2.5 py-1.5 rounded-lg hover:bg-white/60 transition-colors font-serif text-xs text-foreground font-bold"
+        aria-label="Select region"
+      >
+        <FlagImg code={regionConfig.code} size={20} />
+        <span className="hidden sm:inline">{regionConfig.currency}</span>
+        <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-[700] min-w-[180px]">
+          {(Object.values(REGIONS) as typeof REGIONS[Region][]).map((r) => (
+            <button
+              key={r.code}
+              onClick={() => { setRegion(r.code); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-4 py-3 font-serif text-sm text-left transition-colors border-none cursor-pointer ${
+                region === r.code
+                  ? "bg-primary/10 text-primary font-bold"
+                  : "bg-transparent text-foreground hover:bg-secondary/60"
+              }`}
+            >
+              <FlagImg code={r.code} size={22} />
+              <span className="flex-1">{r.label}</span>
+              <span className="text-xs text-foreground/50">{r.currency}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Navbar: React.FC = () => {
   const { totalItems } = useCart();
+  const { formatPrice } = useRegion();
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [activePolicy, setActivePolicy] = useState<string | null>(null);
@@ -196,7 +260,8 @@ const Navbar: React.FC = () => {
           </p>
         </Link>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-2 items-center">
+          <RegionSelector />
           <button
             onClick={() => setSearchOpen((prev) => !prev)}
             className="bg-transparent border-none cursor-pointer p-1 text-foreground"
@@ -277,7 +342,7 @@ const Navbar: React.FC = () => {
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                       />
                       <span className="flex-1">{product.name}</span>
-                      <span className="text-xs opacity-60">Rs. {product.price.toLocaleString()}</span>
+                      <span className="text-xs opacity-60">{formatPrice(product.price, product.price_gbp)}</span>
                     </Link>
                   ))
                 ) : (

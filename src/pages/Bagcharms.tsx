@@ -2,8 +2,11 @@ import { Link } from "react-router-dom";
 import { useProducts } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { useRegion } from "@/context/RegionContext";
 
-const ProductCard = ({ product }: { product: any }) => (
+const ProductCard = ({ product }: { product: any }) => {
+  const { formatPrice } = useRegion();
+  return (
   <Link to={`/accessories/${product.id}`} className="no-underline">
     <div className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
       <div className="h-[290px] bg-solea-warm flex items-center justify-center overflow-hidden">
@@ -20,11 +23,12 @@ const ProductCard = ({ product }: { product: any }) => (
       </div>
       <div className="p-3">
         <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
-        <p className="text-foreground font-serif font-bold text-xs">PKR {product.price?.toLocaleString()}</p>
+        <p className="text-foreground font-serif font-bold text-xs">{formatPrice(product.price, product.price_gbp)}</p>
       </div>
     </div>
   </Link>
-);
+  );
+};
 
 const Bagcharms = () => {
   const { data: dbProducts = [], isLoading } = useProducts();

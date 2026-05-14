@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useHeroBanners, useReviews, useNewArrivals, useBestSellers, useSpottedImages, useSaleProducts, useSiteSettings } from "@/hooks/useAdminData";
+import { useRegion } from "@/context/RegionContext";
 
 const calcDiscount = (original: number, sale: number) =>
   Math.round(((original - sale) / original) * 100);
@@ -212,6 +213,7 @@ const SpottedSection = () => {
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number }) => {
+  const { formatPrice, region } = useRegion();
   const href = product.category === "Accessories" || product.category === "Bagcharms"
     ? `/accessories/${product.id}` : `/product/${product.id}`;
   return (
@@ -235,11 +237,11 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
           <p className="text-foreground font-serif font-bold text-sm">{product.name}</p>
           {salePrice !== undefined ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>PKR {product.price?.toLocaleString()}</p>
-              <p className="font-serif text-sm font-bold" style={{ color: "#dc2626" }}>PKR {Number(salePrice).toLocaleString()}</p>
+              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
+              <p className="font-serif text-sm font-bold" style={{ color: "#dc2626" }}>{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
             </div>
           ) : (
-            <p className="text-foreground font-serif text-sm opacity-70 mt-1">PKR {product.price?.toLocaleString() || "—"}</p>
+            <p className="text-foreground font-serif text-sm opacity-70 mt-1">{formatPrice(product.price, product.price_gbp) || "—"}</p>
           )}
         </div>
       </div>
@@ -254,6 +256,8 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(3);
   const [isMobile, setIsMobile] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
     const update = () => {
@@ -276,7 +280,7 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
   return (
     <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto" }}>
       <div style={{ position: "relative", paddingLeft: isMobile ? "12px" : "52px", paddingRight: isMobile ? "12px" : "52px" }}>
-        {/* ← Desktop only */}
+        {/* ← Desktop arrow */}
         {!isMobile && (
           <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
             className="absolute left-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -284,11 +288,53 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
             <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "12px" }}>
-          {visibleItems.map((item, i) => renderCard(item, i))}
+
+        <div
+          style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "12px", position: "relative" }}
+          onTouchStart={(e) => {
+            touchStartX.current = e.touches[0].clientX;
+            touchStartY.current = e.touches[0].clientY;
+          }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null || touchStartY.current === null) return;
+            const dx = e.changedTouches[0].clientX - touchStartX.current;
+            const dy = e.changedTouches[0].clientY - touchStartY.current;
+            // Only swipe if horizontal movement dominates (not a scroll)
+            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+              if (dx < 0) setPage((p) => Math.min(totalPages - 1, p + 1)); // swipe left → next
+              else        setPage((p) => Math.max(0, p - 1));               // swipe right → prev
+            }
+            touchStartX.current = null;
+            touchStartY.current = null;
+          }}
+        >
+          {visibleItems.map((item, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              {renderCard(item, i)}
+              {/* Mobile tap arrow — prev on first card */}
+              {isMobile && i === 0 && page > 0 && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage((p) => Math.max(0, p - 1)); }}
+                  style={{ position: "absolute", left: 8, top: "40%", transform: "translateY(-50%)", width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.88)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.18)", zIndex: 10 }}
+                >
+                  <ChevronLeft style={{ width: 15, height: 15, color: "#8B1A2F" }} />
+                </button>
+              )}
+              {/* Mobile tap arrow — next on last card */}
+              {isMobile && i === visibleItems.length - 1 && page < totalPages - 1 && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPage((p) => Math.min(totalPages - 1, p + 1)); }}
+                  style={{ position: "absolute", right: 8, top: "40%", transform: "translateY(-50%)", width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.88)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.18)", zIndex: 10 }}
+                >
+                  <ChevronRight style={{ width: 15, height: 15, color: "#8B1A2F" }} />
+                </button>
+              )}
+            </div>
+          ))}
           {Array.from({ length: perPage - visibleItems.length }).map((_, i) => <div key={`e-${i}`} />)}
         </div>
-        {/* → Desktop only */}
+
+        {/* → Desktop arrow */}
         {!isMobile && (
           <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
             className="absolute right-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -432,7 +478,6 @@ const Home = () => {
         @media (max-width: 768px) {
           .about-us-grid { grid-template-columns: 1fr; }
           .about-us-text { padding-right: 0 !important; padding-bottom: 32px; }
-          .about-us-heading { font-size: 72px !important; }
           .about-us-content-wrap { padding: 8px 20px 0 !important; }
         }
       `}</style>
@@ -500,7 +545,14 @@ const Home = () => {
         <section className="py-16 bg-background">
           <Reveal>
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Best Sellers</h2>
-            <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">⁺₊⋆ our most loved pieces ⋆⁺₊</p>
+            <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-8">⁺₊⋆ our most loved pieces ⋆⁺₊</p>
+            <div className="flex justify-center mb-10">
+              <Link to="/shop" className="no-underline" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 28px", border: "1.5px solid #8B1A2F", borderRadius: 999, color: "#8B1A2F", fontFamily: "Georgia, serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", transition: "all 0.2s ease", background: "transparent" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#8B1A2F"; (e.currentTarget as HTMLElement).style.color = "#fff"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "#8B1A2F"; }}>
+                Shop All <ArrowRight size={14} />
+              </Link>
+            </div>
           </Reveal>
           {validBestSellers.length > 0 ? (
             <ProductCarousel
@@ -590,7 +642,7 @@ const Home = () => {
             <div className="about-us-content-wrap" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 48px" }}>
               <div className="about-us-grid">
                 <div className="about-us-text" style={{ paddingTop: "16px", paddingRight: "48px", position: "relative", zIndex: 2 }}>
-                  <h2 className="about-us-heading font-serif" style={{ fontSize: "clamp(52px, 5vw, 90px)", fontWeight: 900, color: "#8B1A2F", lineHeight: 0.92, margin: "0 0 32px 0", letterSpacing: "-0.02em" }}>About<br />Us</h2>
+                  <h2 className="font-serif text-4xl font-black text-foreground mb-8">About Us</h2>
                   <div style={{ width: "48px", height: "2px", background: "#8B1A2F", opacity: 0.35, borderRadius: "2px", marginBottom: "28px" }} />
                   <p className="font-serif" style={{ fontSize: "17px", color: "#8B1A2F", lineHeight: 1.9, margin: "0 0 32px 0", maxWidth: "360px" }}>
                     Soléa is a bead embroidery brand specializing in hand-embroidered designs that bring personality and charm to everyday clothing. Drawing inspiration from nostalgia and playful motifs, each Soléa piece is carefully crafted to feel timeless. Our work celebrates slow fashion and individuality.

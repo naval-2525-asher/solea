@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FilterSortBar, { ViewMode } from "@/components/FilterSortBar";
 import { useFilterSort } from "@/hooks/useFilterSort";
+import { useRegion } from "@/context/RegionContext";
 
 const isOutOfStock = (product: any) =>
   product.stock_status === "out_of_stock" || product.stock_status === "Out of Stock";
@@ -20,6 +21,7 @@ const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
 const ProductCard = ({ product, viewMode = "triple" }: { product: any; viewMode?: ViewMode }) => {
   const oos = isOutOfStock(product);
   const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
+  const { formatPrice } = useRegion();
   return (
     <Link to={`/product/${product.id}`} className="no-underline">
       <div
@@ -46,7 +48,7 @@ const ProductCard = ({ product, viewMode = "triple" }: { product: any; viewMode?
         </div>
         <div className="p-3">
           <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
-          <p className="text-foreground font-serif font-bold text-xs">PKR {product.price?.toLocaleString()}</p>
+          <p className="text-foreground font-serif font-bold text-xs">{formatPrice(product.price, product.price_gbp)}</p>
           {oos && (
             <button disabled style={{ marginTop: "0.5rem", width: "100%", background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", border: "none", borderRadius: "2rem", padding: "6px 0", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7 }}>
               Add to Cart

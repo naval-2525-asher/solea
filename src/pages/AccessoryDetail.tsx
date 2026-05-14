@@ -8,6 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useRegion } from "@/context/RegionContext";
 
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -43,6 +44,7 @@ const AccessoryDetail = () => {
   const rawProduct = dbProduct || staticProduct;
 
   const { addToCart } = useCart();
+  const { region, formatPrice } = useRegion();
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
@@ -275,15 +277,15 @@ const AccessoryDetail = () => {
           {/* Price */}
           {isMultiSelect && selectedMulti.length > 0 ? (
             <>
-              <p className="text-foreground font-serif text-lg font-bold mb-1">PKR {basePrice.toLocaleString()} each</p>
+              <p className="text-foreground font-serif text-lg font-bold mb-1">{formatPrice(basePrice, (dbProduct as any)?.price_gbp)} each</p>
               <p className="text-foreground font-serif text-2xl font-bold mb-8">
-                Total: PKR {multiTotal.toLocaleString()}
+                Total: {region === "UK" ? `£${((dbProduct as any)?.price_gbp ?? 0 * selectedMulti.length * qty).toLocaleString("en-GB")}` : `Rs. ${multiTotal.toLocaleString()}`}
                 <span className="text-sm font-normal opacity-60 ml-2">({selectedMulti.length} × {qty})</span>
               </p>
             </>
           ) : (
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
-              PKR {(isMultiSelect ? basePrice : singleTotal / qty).toLocaleString()}
+              {formatPrice(isMultiSelect ? basePrice : singleTotal / qty, (dbProduct as any)?.price_gbp)}
               {isMultiSelect && <span className="text-sm font-normal opacity-60 ml-2">each</span>}
             </p>
           )}

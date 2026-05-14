@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FilterSortBar, { ViewMode } from "@/components/FilterSortBar";
 import { useFilterSort } from "@/hooks/useFilterSort";
+import { useRegion } from "@/context/RegionContext";
 
 export const accessoryProductsStatic = [
   {
@@ -47,6 +48,7 @@ const ProductCard = ({ product, viewMode = "triple", salePrice }: { product: any
   const oos = isOutOfStock(product);
   const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
   const discount = salePrice ? calcDiscount(product.price, salePrice) : null;
+  const { formatPrice, region } = useRegion();
   return (
     <Link to={`/accessories/${product.id}`} className="no-underline">
       <div
@@ -80,11 +82,11 @@ const ProductCard = ({ product, viewMode = "triple", salePrice }: { product: any
           <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
           {salePrice ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>PKR {product.price?.toLocaleString()}</p>
-              <p className="text-foreground font-serif text-xs font-bold">PKR {Number(salePrice).toLocaleString()}</p>
+              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
+              <p className="text-foreground font-serif text-xs font-bold">{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
             </div>
           ) : (
-            <p className="text-foreground font-serif font-bold text-xs">PKR {product.price?.toLocaleString()}</p>
+            <p className="text-foreground font-serif font-bold text-xs">{formatPrice(product.price, product.price_gbp)}</p>
           )}
           {oos && (
             <button disabled style={{ marginTop: "0.5rem", width: "100%", background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", border: "none", borderRadius: "2rem", padding: "6px 0", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7 }}>

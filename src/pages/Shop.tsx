@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FilterSortBar, { ViewMode } from "@/components/FilterSortBar";
 import { useFilterSort } from "@/hooks/useFilterSort";
+import { useRegion } from "@/context/RegionContext";
 
 const isOutOfStock = (product: any) =>
   product.stock_status === "out_of_stock" || product.stock_status === "Out of Stock";
@@ -19,6 +20,7 @@ const ProductCard = ({ product, showNewBadge = false, viewMode = "triple", saleP
   const oos = isOutOfStock(product);
   const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "320px" : "280px";
   const discount = salePrice ? calcDiscount(product.price, salePrice) : null;
+  const { formatPrice, region } = useRegion();
   return (
     <Link to={`/product/${product.id}`} className="no-underline">
       <div className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative" style={{ opacity: oos ? 0.85 : 1 }}>
@@ -52,11 +54,11 @@ const ProductCard = ({ product, showNewBadge = false, viewMode = "triple", saleP
           <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
           {salePrice ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>PKR {product.price?.toLocaleString()}</p>
-              <p className="text-foreground font-serif text-xs font-bold">PKR {Number(salePrice).toLocaleString()}</p>
+              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
+              <p className="text-foreground font-serif text-xs font-bold">{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
             </div>
           ) : (
-            <p className="text-foreground font-serif font-bold text-xs">PKR {product.price?.toLocaleString()}</p>
+            <p className="text-foreground font-serif font-bold text-xs">{formatPrice(product.price, product.price_gbp)}</p>
           )}
           {oos && (
             <button disabled style={{ marginTop: "0.5rem", width: "100%", background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", border: "none", borderRadius: "2rem", padding: "6px 0", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7 }}>
