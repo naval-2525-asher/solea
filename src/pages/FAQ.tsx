@@ -43,7 +43,7 @@ const faqs: FAQItem[] = [
     id: 6,
     question: "What is your exchange & return policy?",
     answer:
-      "We do not offer exchanges or returns.\n\nAll sales are final once an order has been placed and confirmed.",
+      "We do not offer exchanges or returns.\n\nIf you receive a damaged or defective item, please contact us within 24 hours of receiving your order and include clear photos of the issue. Claims reported after 24 hours of delivery will not be eligible for exchange or store credit.\n\nAll sales are final once an order has been placed and confirmed.",
   },
   {
     id: 7,
