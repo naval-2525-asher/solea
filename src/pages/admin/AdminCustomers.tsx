@@ -81,11 +81,23 @@ export default function AdminCustomers() {
   });
   const customers = Object.values(customerMap);
 
-  const handleStatus = async (id: string, status: string) => {
+  const handleStatus = async (id: string, status: string, customer?: any) => {
     try {
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated!`);
       setOpenDropdown(null);
+
+      // WhatsApp message
+      if (customer && (status === "confirmed" || status === "cancelled")) {
+        const phone = customer.phone?.replace(/[\s\-\+]/g, "") || "";
+        const waPhone = phone.startsWith("0") ? "92" + phone.slice(1) : phone.startsWith("92") ? phone : "92" + phone;
+        const name = customer.first_name;
+        const message = status === "confirmed"
+          ? `Hi ${name}! 🎉 Your Soléa order has been verified and is now in production. Expected delivery in 4-6 days. Thank you for shopping with us! ✨`
+          : `Hi ${name}, unfortunately your Soléa order could not be verified. Please contact us to resolve this or place a new order. We're sorry for the inconvenience.`;
+        const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+        window.open(waUrl, "_blank");
+      }
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -165,13 +177,13 @@ export default function AdminCustomers() {
                               ))}
                               <div style={{ borderTop: "1px solid hsl(var(--border))", marginTop: 6, paddingTop: 6, display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px" }}>
                                 <button
-                                  onClick={() => handleStatus(c.id, "confirmed")}
+                                  onClick={() => handleStatus(c.id, "confirmed", c)}
                                   style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "7px 12px", borderRadius: 6, border: "none", background: c.status === "confirmed" ? "#16a34a" : "#dcfce7", color: c.status === "confirmed" ? "#fff" : "#16a34a", cursor: "pointer", textAlign: "left" }}
                                 >
                                   ✓ Verify Order
                                 </button>
                                 <button
-                                  onClick={() => handleStatus(c.id, "cancelled")}
+                                  onClick={() => handleStatus(c.id, "cancelled", c)}
                                   style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "7px 12px", borderRadius: 6, border: "none", background: c.status === "cancelled" ? "#dc2626" : "#fee2e2", color: c.status === "cancelled" ? "#fff" : "#dc2626", cursor: "pointer", textAlign: "left" }}
                                 >
                                   ✕ Cancel Order
