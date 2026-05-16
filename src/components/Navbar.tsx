@@ -7,11 +7,7 @@ import { useCart } from "@/context/CartContext";
 import { useSiteSettings } from "@/hooks/useAdminData";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
-const policies = [
-  { key: "refund", label: "Refunds & Exchange Policy", image: "/refund.jpg" },
-  { key: "custom", label: "Custom Order Policy", image: "/custom.jpg" },
-  { key: "care", label: "Care Instructions", image: "/care_instruction.jpg" },
-];
+
 
 const AnnouncementBar = () => {
   const { data: settings = [] } = useSiteSettings();
@@ -91,8 +87,7 @@ const Navbar: React.FC = () => {
   const { totalItems } = useCart();
   const { formatPrice } = useRegion();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [activePolicy, setActivePolicy] = useState<string | null>(null);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -119,41 +114,13 @@ const Navbar: React.FC = () => {
     <>
       <AnnouncementBar />
 
-      {/* Policy Image Popup */}
-      {activePolicy && createPortal(
-        <div
-          onClick={() => setActivePolicy(null)}
-          className="fixed inset-0 z-[2000] flex items-start justify-center pt-[10vh]"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-[300px] w-[70vw] mx-auto bg-card rounded-2xl overflow-hidden shadow-2xl max-h-[80vh] overflow-y-auto"
-          >
-            <button
-              onClick={() => setActivePolicy(null)}
-              className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-destructive text-white flex items-center justify-center font-black text-sm cursor-pointer border-none"
-            >
-              ✕
-            </button>
-            {policies.filter((p) => p.key === activePolicy).map((p) => (
-              <div key={p.key}>
-                <img src={p.image} alt={p.label} className="w-full h-auto block" />
-                <div className="p-4 text-center">
-                  <p className="text-foreground font-serif font-bold text-sm">{p.label}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
+
 
       {/* Burger Menu Overlay */}
       {menuOpen && createPortal(
         <div
           className="fixed inset-0 z-[600] bg-black/50"
-          onClick={() => { setMenuOpen(false); setAboutOpen(false); }}
+          onClick={() => setMenuOpen(false)}
         >
           <div
             className="absolute top-0 left-0 h-full w-[240px] shadow-xl"
@@ -163,7 +130,7 @@ const Navbar: React.FC = () => {
             <div className="flex items-center justify-between p-5 border-b border-foreground/20">
               <p className="font-serif font-black text-2xl text-foreground">soléa</p>
               <button
-                onClick={() => { setMenuOpen(false); setAboutOpen(false); }}
+                onClick={() => setMenuOpen(false)}
                 className="bg-transparent border-none cursor-pointer text-foreground"
               >
                 <X size={22} />
@@ -213,29 +180,6 @@ const Navbar: React.FC = () => {
               >
                 FAQ <ChevronRight size={16} />
               </Link>
-              <button
-                onClick={() => setAboutOpen(!aboutOpen)}
-                className="font-serif text-sm text-foreground bg-transparent border-none cursor-pointer py-3 px-4 rounded-lg hover:bg-white/20 transition-colors text-left flex items-center justify-between w-full"
-              >
-                Policies & Instructions <ChevronRight size={16} className={`transition-transform ${aboutOpen ? "rotate-90" : ""}`} />
-              </button>
-              {aboutOpen && (
-                <div className="flex flex-col gap-1 ml-2">
-                  {policies.map((p) => (
-                    <button
-                      key={p.key}
-                      onClick={() => {
-                        setActivePolicy(p.key);
-                        setMenuOpen(false);
-                        setAboutOpen(false);
-                      }}
-                      className="font-serif text-xs text-foreground bg-white/30 border-none cursor-pointer py-2.5 px-4 rounded-lg hover:bg-white/50 transition-colors text-left w-full"
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </nav>
           </div>
         </div>,
