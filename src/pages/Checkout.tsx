@@ -6,12 +6,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Paperclip, CheckCircle2, Lock } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
+import { useInsertOrder, uploadFile } from "@/hooks/useAdminData";
 
 const Checkout = () => {
   const { items, totalPrice, clearCart } = useCart();
   const navigate = useNavigate();
   const { region, regionConfig } = useRegion();
   const isUK = region === "UK";
+  const insertOrder = useInsertOrder();
 
   const formatCheckoutPrice = (price: number) =>
     isUK ? `£${price.toLocaleString("en-GB")}` : `PKR ${price.toLocaleString()}`;
@@ -51,7 +53,7 @@ const Checkout = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentDone) {
       toast({
@@ -73,12 +75,41 @@ const Checkout = () => {
       toast({ title: "Please fill in all shipping details", variant: "destructive" });
       return;
     }
-    toast({
-      title: "Order placed! 🎉",
-      description: "We'll confirm your order once payment is verified. Thank you!",
-    });
-    clearCart();
-    navigate("/");
+
+    try {
+      // Upload transaction screenshot
+      let screenshotUrl = "";
+      if (txnImage) {
+        screenshotUrl = await uploadFile(txnImage, "transactions");
+      }
+
+      // Save order to Supabase
+      await insertOrder.mutateAsync({
+        first_name: form.firstName,
+        last_name: form.lastName,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        city: form.city,
+        province: form.province || null,
+        postcode: form.postcode || null,
+        region,
+        items: items,
+        total: totalPrice,
+        transaction_id: txnId,
+        transaction_screenshot: screenshotUrl,
+        status: "pending",
+      });
+
+      toast({
+        title: "Order placed! 🎉",
+        description: "We'll confirm your order once payment is verified. Thank you!",
+      });
+      clearCart();
+      navigate("/");
+    } catch (err: any) {
+      toast({ title: "Error placing order", description: err.message, variant: "destructive" });
+    }
   };
 
   if (items.length === 0) {

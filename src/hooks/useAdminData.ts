@@ -354,6 +354,55 @@ export function useDeleteSaleProduct() {
   });
 }
 
+// ─── Orders ───
+export function useOrders() {
+  return useQuery({
+    queryKey: ["orders"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+}
+
+export function useUpdateOrderStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase
+        .from("orders" as any)
+        .update({ status })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+export function useInsertOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (order: any) => {
+      const { data, error } = await supabase
+        .from("orders" as any)
+        .insert(order)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
 // ─── File upload helper ───
 export async function uploadFile(file: File, folder: string): Promise<string> {
   const ext = file.name.split(".").pop();
