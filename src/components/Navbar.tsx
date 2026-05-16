@@ -206,6 +206,13 @@ const Navbar: React.FC = () => {
               >
                 Limited Edition <ChevronRight size={16} />
               </Link>
+              <Link
+                to="/faq"
+                className="font-serif text-sm text-foreground no-underline py-3 px-4 rounded-lg hover:bg-white/20 transition-colors flex items-center justify-between"
+                onClick={() => setMenuOpen(false)}
+              >
+                FAQ <ChevronRight size={16} />
+              </Link>
               <button
                 onClick={() => setAboutOpen(!aboutOpen)}
                 className="font-serif text-sm text-foreground bg-transparent border-none cursor-pointer py-3 px-4 rounded-lg hover:bg-white/20 transition-colors text-left flex items-center justify-between w-full"

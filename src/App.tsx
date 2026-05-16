@@ -27,6 +27,7 @@ import AdminSpotted from "./pages/admin/AdminSpotted";
 import AdminStorefront from "./pages/admin/AdminStorefront";
 import AdminInventory from "./pages/admin/AdminInventory";
 import AdminSettings from "./pages/admin/AdminSettings";
+import FAQ from "./pages/FAQ";
 
 // Shop-like pages where we want scroll position restored on back-navigation
 const SCROLL_RESTORE_PATHS = ["/shop", "/accessories", "/limited-edition", "/sale", "/bagcharms"];
@@ -38,10 +39,8 @@ const ScrollManager = () => {
   useEffect(() => {
     const key = `scrollPos:${pathname}`;
 
-    // Detect whether this is a back/forward navigation
     const navEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     const isBackForward = navEntry?.type === "back_forward"
-      // fallback: if previous page was a product/detail and current is a shop page
       || (
         prevPathname.current !== null &&
         (prevPathname.current.startsWith("/product/") || prevPathname.current.startsWith("/accessories/")) &&
@@ -49,11 +48,9 @@ const ScrollManager = () => {
       );
 
     if (isBackForward) {
-      // Restore saved scroll position
       const saved = sessionStorage.getItem(key);
       if (saved) {
         const y = parseInt(saved, 10);
-        // Defer until after paint so the page has rendered
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             window.scrollTo({ top: y, behavior: "instant" });
@@ -61,14 +58,12 @@ const ScrollManager = () => {
         });
       }
     } else {
-      // Fresh navigation — scroll to top and clear any stale saved position
       window.scrollTo(0, 0);
     }
 
     prevPathname.current = pathname;
   }, [pathname]);
 
-  // Save scroll position for shop pages whenever user scrolls
   useEffect(() => {
     if (!SCROLL_RESTORE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
 
@@ -104,6 +99,7 @@ const App = () => (
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/sale" element={<Sale />} />
+            <Route path="/faq" element={<FAQ />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminOverview />} />
               <Route path="orders" element={<AdminOrders />} />
