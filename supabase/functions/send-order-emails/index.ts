@@ -10,7 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const ADMIN_EMAIL = "shopsoleakhi@gmail.com";
-const FROM_EMAIL = "Soléa Orders <onboarding@resend.dev>";
+const FROM_EMAIL = "Soléa Orders <orders@soleakhi.com>";
 const RESEND_API = "https://api.resend.com/emails";
 
 const corsHeaders = {
