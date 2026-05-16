@@ -1,21 +1,37 @@
 import { useState } from "react";
 import { useOrders, useUpdateOrderStatus } from "@/hooks/useAdminData";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
-const STATUS_OPTIONS = [
-  { value: "in-production", label: "Processing", color: "#d97706" },
-  { value: "shipped", label: "Shipped", color: "#7c3aed" },
-  { value: "delivered", label: "Delivered", color: "#0891b2" },
+const SHIPPING_OPTIONS = [
+  { value: "in-production", label: "Processing", color: "#d97706", bg: "#fef3c7" },
+  { value: "shipped",       label: "Shipped",    color: "#7c3aed", bg: "#ede9fe" },
+  { value: "delivered",     label: "Delivered",  color: "#0891b2", bg: "#cffafe" },
+  { value: "cancelled",     label: "Cancelled",  color: "#dc2626", bg: "#fee2e2" },
 ];
 
-const statusLabel = (status: string) => {
-  if (status === "confirmed") return { label: "✓ Verified", color: "#16a34a" };
-  if (status === "in-production") return { label: "⚙ Processing", color: "#d97706" };
-  if (status === "shipped") return { label: "🚚 Shipped", color: "#7c3aed" };
-  if (status === "delivered") return { label: "✅ Delivered", color: "#0891b2" };
-  if (status === "cancelled") return { label: "✕ Cancelled", color: "#dc2626" };
-  return { label: "● Pending", color: "#d97706" };
+const statusBadge = (status: string) => {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    confirmed:      { label: "✓ Verified",    color: "#16a34a", bg: "#dcfce7" },
+    "in-production":{ label: "⚙ Processing",  color: "#d97706", bg: "#fef3c7" },
+    shipped:        { label: "🚚 Shipped",     color: "#7c3aed", bg: "#ede9fe" },
+    delivered:      { label: "✅ Delivered",   color: "#0891b2", bg: "#cffafe" },
+    cancelled:      { label: "✕ Cancelled",   color: "#dc2626", bg: "#fee2e2" },
+  };
+  return map[status] || { label: "● Pending", color: "#d97706", bg: "#fef3c7" };
+};
+
+const buildWhatsAppLink = (phone: string, name: string, status: string) => {
+  let n = phone.replace(/\D/g, "");
+  if (n.startsWith("0") && !n.startsWith("00")) n = "92" + n.slice(1);
+  const msgs: Record<string, string> = {
+    "in-production": `Hi ${name}! 🌸 Your Soléa order is now in production. We'll notify you once it ships. Thank you! 💕`,
+    shipped:         `Hi ${name}! 🚚 Great news — your Soléa order is on its way! Expect delivery soon. 💕`,
+    delivered:       `Hi ${name}! ✅ We hope your Soléa order arrived safely. Thank you for shopping with us! 🌸`,
+    cancelled:       `Hi ${name}, unfortunately your Soléa order has been cancelled. Please contact us if you have any questions.`,
+  };
+  const msg = msgs[status] || `Hi ${name}! An update on your Soléa order.`;
+  return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
 };
 
 const OrderModal = ({ order, onClose }: { order: any; onClose: () => void }) => (
@@ -49,12 +65,14 @@ const OrderModal = ({ order, onClose }: { order: any; onClose: () => void }) => 
         {(order.items || []).map((item: any, i: number) => (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", fontFamily: "Georgia, serif", fontSize: "0.8rem", padding: "6px 0", borderBottom: "1px solid hsl(var(--border))" }}>
             <span style={{ color: "hsl(var(--foreground))" }}>{item.name} · {item.size} × {item.quantity}</span>
-            <span style={{ fontWeight: 700, color: "hsl(var(--foreground))" }}>PKR {(item.price * item.quantity).toLocaleString()}</span>
+            <span style={{ fontWeight: 700, color: "hsl(var(--foreground))" }}>
+              {order.region === "UK" ? `£${(item.price * item.quantity).toLocaleString("en-GB")}` : `PKR ${(item.price * item.quantity).toLocaleString()}`}
+            </span>
           </div>
         ))}
         <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.9rem", paddingTop: 8, color: "hsl(var(--foreground))" }}>
           <span>Total</span>
-          <span>PKR {Number(order.total).toLocaleString()}</span>
+          <span>{order.region === "UK" ? `£${Number(order.total).toLocaleString("en-GB")}` : `PKR ${Number(order.total).toLocaleString()}`}</span>
         </div>
       </div>
 
@@ -74,28 +92,25 @@ export default function AdminCustomers() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
 
-  // One row per customer (most recent order per email), already sorted descending
+  // Only show VERIFIED customers (status !== pending and !== cancelled at top level)
+  // One row per customer email — most recent order
   const customerMap: Record<string, any> = {};
-  orders.forEach((o: any) => {
-    if (!customerMap[o.email]) customerMap[o.email] = o;
-  });
+  (orders as any[])
+    .filter((o: any) => o.status !== "pending" && o.status !== "cancelled")
+    .forEach((o: any) => {
+      if (!customerMap[o.email]) customerMap[o.email] = o;
+    });
   const customers = Object.values(customerMap);
 
   const handleStatus = async (id: string, status: string, customer?: any) => {
     try {
       await updateStatus.mutateAsync({ id, status });
-      toast.success(`Status updated!`);
+      toast.success("Status updated!");
       setOpenDropdown(null);
 
-      // WhatsApp message
-      if (customer && (status === "confirmed" || status === "cancelled")) {
-        const phone = customer.phone?.replace(/[\s\-\+]/g, "") || "";
-        const waPhone = phone.startsWith("0") ? "92" + phone.slice(1) : phone.startsWith("92") ? phone : "92" + phone;
-        const name = customer.first_name;
-        const message = status === "confirmed"
-          ? `Hi ${name}! 🎉 Your Soléa order has been verified and is now in production. Expected delivery in 4-6 days. Thank you for shopping with us! ✨`
-          : `Hi ${name}, unfortunately your Soléa order could not be verified. Please contact us to resolve this or place a new order. We're sorry for the inconvenience.`;
-        const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+      // Auto-open WhatsApp for shipping updates
+      if (customer && ["in-production", "shipped", "delivered", "cancelled"].includes(status)) {
+        const waUrl = buildWhatsAppLink(customer.phone, customer.first_name, status);
         window.open(waUrl, "_blank");
       }
     } catch (e: any) {
@@ -105,13 +120,18 @@ export default function AdminCustomers() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-serif text-2xl font-black text-foreground">Customers</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-serif text-2xl font-black text-foreground">Customers</h1>
+        <span className="font-serif text-xs text-muted-foreground bg-secondary px-3 py-1 rounded-full">
+          Verified only — {customers.length} customer{customers.length !== 1 ? "s" : ""}
+        </span>
+      </div>
 
       {isLoading ? (
         <div className="font-serif text-sm text-muted-foreground">Loading...</div>
       ) : customers.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-8 text-center font-serif text-muted-foreground text-sm">
-          No customers yet — they'll appear here after placing an order.
+          No verified customers yet — verified orders will appear here.
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -124,70 +144,82 @@ export default function AdminCustomers() {
                   <th className="text-left p-4 text-muted-foreground font-medium">Phone</th>
                   <th className="text-left p-4 text-muted-foreground font-medium">City</th>
                   <th className="text-left p-4 text-muted-foreground font-medium">Order</th>
-                  <th className="text-left p-4 text-muted-foreground font-medium">Date of Order</th>
-                  <th className="text-left p-4 text-muted-foreground font-medium">Status</th>
+                  <th className="text-left p-4 text-muted-foreground font-medium">Date</th>
+                  <th className="text-left p-4 text-muted-foreground font-medium">Shipping Status</th>
                 </tr>
               </thead>
               <tbody>
                 {customers.map((c: any) => {
-                  const sl = statusLabel(c.status);
+                  const badge = statusBadge(c.status);
+                  const isOpen = openDropdown === c.id;
                   return (
                     <tr key={c.id} className="border-b border-border/50 hover:bg-secondary/20">
                       <td className="p-4 font-bold text-foreground">{c.first_name} {c.last_name}</td>
-                      <td className="p-4 text-foreground/80">{c.email}</td>
-                      <td className="p-4 text-muted-foreground">{c.phone}</td>
-                      <td className="p-4 text-muted-foreground">{c.city}</td>
+                      <td className="p-4 text-foreground/80 text-xs">{c.email}</td>
+                      <td className="p-4 text-muted-foreground text-xs">{c.phone}</td>
+                      <td className="p-4 text-muted-foreground text-xs">{c.city}</td>
                       <td className="p-4">
                         <button
                           onClick={() => setViewOrder(c)}
                           style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", fontWeight: 700, background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border))", borderRadius: "2rem", padding: "4px 14px", cursor: "pointer", color: "hsl(var(--foreground))" }}
                         >
-                          View Order
+                          View
                         </button>
                       </td>
-                      <td className="p-4 text-muted-foreground">
+                      <td className="p-4 text-muted-foreground text-xs">
                         {new Date(c.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                       </td>
                       <td className="p-4">
                         <div style={{ position: "relative", display: "inline-block" }}>
+                          {/* Status badge / dropdown trigger */}
                           <button
-                            onClick={() => setOpenDropdown(openDropdown === c.id ? null : c.id)}
-                            style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border))", borderRadius: "2rem", padding: "4px 12px", cursor: "pointer", color: sl.color }}
+                            onClick={() => setOpenDropdown(isOpen ? null : c.id)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 6,
+                              fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700,
+                              background: badge.bg, border: "none", borderRadius: "2rem",
+                              padding: "5px 12px", cursor: "pointer", color: badge.color,
+                            }}
                           >
-                            {sl.label}
+                            {badge.label}
                             <ChevronDown size={12} />
                           </button>
 
-                          {openDropdown === c.id && (
-                            <div style={{ position: "absolute", top: "110%", left: 0, zIndex: 100, background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 10, padding: 8, minWidth: 170, boxShadow: "0 4px 16px rgba(0,0,0,0.12)" }}>
-                              {STATUS_OPTIONS.map((opt) => (
-                                <label
+                          {isOpen && (
+                            <div
+                              style={{ position: "absolute", top: "110%", left: 0, zIndex: 100, background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, padding: 8, minWidth: 190, boxShadow: "0 8px 24px rgba(0,0,0,0.14)" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <p style={{ fontFamily: "Georgia, serif", fontSize: "0.7rem", color: "hsl(var(--muted-foreground))", padding: "4px 10px 8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                Update Shipping
+                              </p>
+                              {SHIPPING_OPTIONS.map((opt) => (
+                                <button
                                   key={opt.value}
-                                  style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "8px 12px", borderRadius: 6, cursor: "pointer", color: opt.color, marginBottom: 2 }}
+                                  onClick={() => handleStatus(c.id, opt.value, c)}
+                                  style={{
+                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                    width: "100%", fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700,
+                                    padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+                                    background: c.status === opt.value ? opt.bg : "transparent",
+                                    color: opt.color, marginBottom: 2, textAlign: "left",
+                                  }}
                                 >
-                                  <input
-                                    type="radio"
-                                    name={`status-${c.id}`}
-                                    checked={c.status === opt.value}
-                                    onChange={() => handleStatus(c.id, opt.value)}
-                                    style={{ accentColor: opt.color }}
-                                  />
                                   {opt.label}
-                                </label>
+                                  {c.status === opt.value && <span style={{ fontSize: 10 }}>✓</span>}
+                                </button>
                               ))}
-                              <div style={{ borderTop: "1px solid hsl(var(--border))", marginTop: 6, paddingTop: 6, display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px" }}>
-                                <button
-                                  onClick={() => handleStatus(c.id, "confirmed", c)}
-                                  style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "7px 12px", borderRadius: 6, border: "none", background: c.status === "confirmed" ? "#16a34a" : "#dcfce7", color: c.status === "confirmed" ? "#fff" : "#16a34a", cursor: "pointer", textAlign: "left" }}
+                              {/* WhatsApp button */}
+                              <div style={{ borderTop: "1px solid hsl(var(--border))", marginTop: 6, paddingTop: 6 }}>
+                                <a
+                                  href={buildWhatsAppLink(c.phone, c.first_name, c.status)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "8px 10px", borderRadius: 8, background: "#dcfce7", color: "#16a34a", textDecoration: "none" }}
                                 >
-                                  ✓ Verify Order
-                                </button>
-                                <button
-                                  onClick={() => handleStatus(c.id, "cancelled", c)}
-                                  style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "7px 12px", borderRadius: 6, border: "none", background: c.status === "cancelled" ? "#dc2626" : "#fee2e2", color: c.status === "cancelled" ? "#fff" : "#dc2626", cursor: "pointer", textAlign: "left" }}
-                                >
-                                  ✕ Cancel Order
-                                </button>
+                                  <MessageCircle size={13} />
+                                  WhatsApp Customer
+                                </a>
                               </div>
                             </div>
                           )}
