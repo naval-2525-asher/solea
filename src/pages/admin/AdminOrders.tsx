@@ -33,7 +33,7 @@ export default function AdminOrders() {
         toast.success(`✓ Order verified! WhatsApp reminder sent to admin (${whatsappNumber}).`);
         // Open WhatsApp to notify customer
         if (order) {
-          const waUrl = buildWhatsAppLink(order.phone, order.first_name, order.id);
+          const waUrl = buildWhatsAppLink(order.phone, order.first_name, order.id, order.status);
           setTimeout(() => window.open(waUrl, "_blank"), 500);
         }
       } else if (status === "cancelled") {
@@ -46,13 +46,20 @@ export default function AdminOrders() {
     }
   };
 
-  const buildWhatsAppLink = (phone: string, name: string, orderId: string) => {
+  const buildWhatsAppLink = (phone: string, name: string, orderId: string, status?: string) => {
     let n = phone.replace(/\D/g, "");
     if (n.startsWith("0") && !n.startsWith("00")) n = "92" + n.slice(1);
-    const msg = encodeURIComponent(
-      `Hello ${name}! 🌸 Your Soléa order #${orderId.slice(0, 8).toUpperCase()} has been verified and confirmed. We'll keep you updated on production and shipping. Thank you for shopping with us! 💕`
-    );
-    return `https://wa.me/${n}?text=${msg}`;
+    const ref = orderId.slice(0, 8).toUpperCase();
+    const msgs: Record<string, string> = {
+      pending:          `Hello ${name}! 🌸 We've received your Soléa order #${ref} and are reviewing your payment. We'll confirm shortly. Thank you! 💕`,
+      confirmed:        `Hello ${name}! 🌸 Your Soléa order #${ref} has been verified and confirmed. We'll keep you updated on production and shipping. Thank you! 💕`,
+      "in-production":  `Hello ${name}! ⚙️ Your Soléa order #${ref} is now in production. Estimated delivery in 4–6 days. Thank you for your patience! 🌸`,
+      shipped:          `Hello ${name}! 🚚 Great news — your Soléa order #${ref} is on its way! Expect delivery soon. 💕`,
+      delivered:        `Hello ${name}! ✅ We hope your Soléa order #${ref} arrived safely. Thank you so much for shopping with us! 🌸`,
+      cancelled:        `Hello ${name}, unfortunately your Soléa order #${ref} has been cancelled. Please contact us if you have any questions or to place a new order.`,
+    };
+    const msg = msgs[status || "confirmed"] || msgs["confirmed"];
+    return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
   };
 
   return (
@@ -151,7 +158,7 @@ export default function AdminOrders() {
                             )}
                             {/* WhatsApp button */}
                             <a
-                              href={buildWhatsAppLink(order.phone, order.first_name, order.id)}
+                              href={buildWhatsAppLink(order.phone, order.first_name, order.id, order.status)}
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, padding: "5px 12px", borderRadius: "2rem", background: "#dcfce7", color: "#16a34a", textDecoration: "none", whiteSpace: "nowrap" }}
@@ -242,7 +249,7 @@ export default function AdminOrders() {
                                 {/* WhatsApp prompt */}
                                 <div className="flex items-center gap-2 pt-1">
                                   <a
-                                    href={buildWhatsAppLink(order.phone, order.first_name, order.id)}
+                                    href={buildWhatsAppLink(order.phone, order.first_name, order.id, order.status)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 font-serif text-xs px-4 py-2 rounded-full no-underline transition-colors"
