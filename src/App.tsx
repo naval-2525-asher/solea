@@ -17,7 +17,6 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import NotFound from "./pages/NotFound";
 import Sale from "./pages/Sale";
-import RegionGate from "./components/RegionGate";
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminOrders from "./pages/admin/AdminOrders";
@@ -84,7 +83,6 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <RegionProvider>
-      <RegionGate />
       <CartProvider>
         <Toaster />
         <Sonner />

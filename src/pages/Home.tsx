@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useHeroBanners, useReviews, useNewArrivals, useBestSellers, useSpottedImages, useSaleProducts, useSiteSettings } from "@/hooks/useAdminData";
+import RegionGate from "@/components/RegionGate";
 import { useRegion } from "@/context/RegionContext";
 
 const calcDiscount = (original: number, sale: number) =>
@@ -487,6 +488,8 @@ const Home = () => {
           <p className="text-foreground font-serif font-black text-6xl">soléa</p>
         </div>
       )}
+
+      <RegionGate show={splashDone} />
 
       <main className="min-h-screen bg-background" style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(20px)", transition: "opacity 0.8s ease, transform 0.8s ease" }}>
         <Navbar />
