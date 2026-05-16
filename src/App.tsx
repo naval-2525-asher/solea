@@ -26,6 +26,7 @@ import AdminReviews from "./pages/admin/AdminReviews";
 import AdminSpotted from "./pages/admin/AdminSpotted";
 import AdminStorefront from "./pages/admin/AdminStorefront";
 import AdminInventory from "./pages/admin/AdminInventory";
+import AdminSettings from "./pages/admin/AdminSettings";
 
 // Shop-like pages where we want scroll position restored on back-navigation
 const SCROLL_RESTORE_PATHS = ["/shop", "/accessories", "/limited-edition", "/sale", "/bagcharms"];
@@ -112,6 +113,7 @@ const App = () => (
               <Route path="spotted" element={<AdminSpotted />} />
               <Route path="storefront" element={<AdminStorefront />} />
               <Route path="inventory" element={<AdminInventory />} />
+              <Route path="settings" element={<AdminSettings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

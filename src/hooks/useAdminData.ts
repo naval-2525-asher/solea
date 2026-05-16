@@ -378,6 +378,39 @@ export function useUpdateOrderStatus() {
         .update({ status })
         .eq("id", id);
       if (error) throw error;
+
+      // When order is confirmed, notify admin with the WhatsApp number to use
+      if (status === "confirmed") {
+        try {
+          const { data: order } = await supabase
+            .from("orders" as any)
+            .select("*")
+            .eq("id", id)
+            .single();
+
+          if (order) {
+            // Fetch the current WhatsApp number from site_settings
+            const { data: settings } = await supabase
+              .from("site_settings")
+              .select("*");
+            const waNumberSetting = (settings as any[])?.find(
+              (s: any) => s.key === "whatsapp_number"
+            );
+            const whatsappNumber = waNumberSetting?.value || "03248922980";
+
+            await supabase.functions.invoke("send-order-emails", {
+              body: {
+                type: "admin_order_confirmed",
+                order,
+                whatsappNumber,
+              },
+            });
+          }
+        } catch (emailErr) {
+          // Don't fail the status update if email fails
+          console.error("Confirmation email failed:", emailErr);
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });
@@ -395,6 +428,19 @@ export function useInsertOrder() {
         .select()
         .single();
       if (error) throw error;
+
+      // Fire order confirmation emails immediately after insert (non-blocking)
+      Promise.all([
+        supabase.functions.invoke("send-order-emails", {
+          body: { type: "admin_new_order", order: data },
+        }),
+        supabase.functions.invoke("send-order-emails", {
+          body: { type: "customer_confirmation", order: data },
+        }),
+      ]).catch((err) => {
+        console.error("Order confirmation emails failed:", err);
+      });
+
       return data;
     },
     onSuccess: () => {
