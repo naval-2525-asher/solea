@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export type Region = "PK" | "UK";
 
@@ -36,12 +36,25 @@ interface RegionContextType {
   setRegion: (r: Region) => void;
   formatPrice: (pkrPrice: number, gbpPrice?: number) => string;
   getPrice: (pkrPrice: number, gbpPrice?: number) => number;
+  regionSelected: boolean;
 }
 
 const RegionContext = createContext<RegionContextType | undefined>(undefined);
 
 export const RegionProvider = ({ children }: { children: ReactNode }) => {
   const [region, setRegionState] = useState<Region>("PK");
+  const [regionSelected, setRegionSelected] = useState<boolean>(false);
+
+  // On mount, check localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("solea_region") as Region | null;
+    if (saved && (saved === "PK" || saved === "UK")) {
+      setRegionState(saved);
+      setRegionSelected(true);
+    } else {
+      setRegionSelected(false);
+    }
+  }, []);
 
   const regionConfig = REGIONS[region];
 
@@ -60,10 +73,12 @@ export const RegionProvider = ({ children }: { children: ReactNode }) => {
 
   const setRegion = (r: Region) => {
     setRegionState(r);
+    setRegionSelected(true);
+    localStorage.setItem("solea_region", r);
   };
 
   return (
-    <RegionContext.Provider value={{ region, regionConfig, setRegion, formatPrice, getPrice }}>
+    <RegionContext.Provider value={{ region, regionConfig, setRegion, formatPrice, getPrice, regionSelected }}>
       {children}
     </RegionContext.Provider>
   );

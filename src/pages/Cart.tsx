@@ -20,9 +20,9 @@ const Cart = () => {
 
   if (items.length === 0) {
     return (
-      <main className="bg-background min-h-screen">
+      <main className="bg-background min-h-screen flex flex-col">
         <Navbar />
-        <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
+        <div className="flex flex-col items-center justify-center flex-1 py-32 px-6 text-center">
           <p className="text-foreground font-serif text-2xl font-bold mb-4">Your cart is empty</p>
           <Link to="/shop" className="bg-primary text-primary-foreground font-serif font-bold text-sm px-8 py-3 rounded-full no-underline tracking-wider uppercase hover:scale-[1.02] transition-transform">
             Continue Shopping

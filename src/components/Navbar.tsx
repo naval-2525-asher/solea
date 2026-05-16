@@ -193,13 +193,14 @@ const Navbar: React.FC = () => {
           background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 40px, hsl(var(--solea-beige)) 40px, hsl(var(--solea-beige)) 80px)",
         }}
       >
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setMenuOpen(true)}
             className="bg-white/40 backdrop-blur-sm border-none cursor-pointer p-2 text-foreground rounded-lg hover:bg-white/60 transition-colors"
           >
             <Menu size={24} />
           </button>
+          <RegionSelector />
         </div>
 
         <Link to="/" className="absolute left-1/2 -translate-x-1/2 no-underline text-center">
@@ -212,7 +213,6 @@ const Navbar: React.FC = () => {
         </Link>
 
         <div className="flex gap-2 items-center">
-          <RegionSelector />
           <button
             onClick={() => setSearchOpen((prev) => !prev)}
             className="bg-transparent border-none cursor-pointer p-1 text-foreground"

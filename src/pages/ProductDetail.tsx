@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { products as staticProducts } from "@/lib/products";
 import { useCart } from "@/context/CartContext";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -150,7 +150,7 @@ const ProductDetail = () => {
   const handleAddToCart = () => {
     // 1. Size validation
     if (hasSizes && !selectedSize) {
-      toast({ title: "Please select a size", variant: "destructive" });
+      toast.error("Please select a size");
       return;
     }
 
@@ -167,7 +167,7 @@ const ProductDetail = () => {
     if (missingInputs.length > 0) {
       setCustomErrors(missingInputs);
       triggerShake([]);
-      toast({ title: "Please fill all required fields", variant: "destructive" });
+      toast.error("Please fill all required fields");
       return;
     }
 
@@ -188,7 +188,7 @@ const ProductDetail = () => {
     });
 
     const regionPrice = region === "UK"
-      ? ((dbProduct?.price_gbp ?? 0) + extraPrice)
+      ? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice)
       : (salePrice ?? displayPrice);
 
     addToCart({
@@ -200,7 +200,7 @@ const ProductDetail = () => {
       style: isTeeProduct ? selectedType : "tee",
       customisation: Object.keys(customisation).length > 0 ? customisation : undefined,
     });
-    toast({ title: `${product.name} added to cart!` });
+    toast.success(`${product.name} added to cart!`);
   };
 
   const inputStyle: React.CSSProperties = {
@@ -312,11 +312,11 @@ const ProductDetail = () => {
             <div className="flex items-center gap-3 mb-8">
               <p className="text-foreground font-serif text-2xl font-bold">
                 {region === "UK"
-                  ? `£${((dbProduct?.price_gbp ?? 0) + extraPrice).toLocaleString("en-GB")}`
+                  ? `£${(((dbProduct as any)?.price_gbp ?? 0) + extraPrice).toLocaleString("en-GB")}`
                   : `Rs. ${salePrice.toLocaleString()}`}
               </p>
               <p className="font-serif text-lg" style={{ textDecoration: "line-through", opacity: 0.45 }}>
-                {formatPrice(displayPrice, dbProduct?.price_gbp ?? 0)}
+                {formatPrice(displayPrice, (dbProduct as any)?.price_gbp ?? 0)}
               </p>
               {region === "PK" && (
                 <span style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "3px 10px", borderRadius: "2rem" }}>
@@ -326,7 +326,7 @@ const ProductDetail = () => {
             </div>
           ) : (
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
-              {formatPrice(displayPrice, (dbProduct?.price_gbp ?? 0) + extraPrice)}
+              {formatPrice(displayPrice, ((dbProduct as any)?.price_gbp ?? 0) + extraPrice)}
               {extraPrice > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPrice.toLocaleString()} for selected option)</span>}
               {extraPrice > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPrice.toLocaleString("en-GB")} for selected option)</span>}
             </p>
