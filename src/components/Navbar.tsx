@@ -26,7 +26,7 @@ import { useRegion, REGIONS, Region } from "@/context/RegionContext";
           display: "inline-flex",       // inline-flex instead of flex
           flexShrink: 0,
           whiteSpace: "nowrap",
-          animation: "marquee 60s linear infinite",
+          animation: "marquee 80s linear infinite",
           willChange: "transform",
         }}
       >
