@@ -7,46 +7,54 @@ import { useCart } from "@/context/CartContext";
 import { useSiteSettings } from "@/hooks/useAdminData";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
-  const AnnouncementBar = () => {
+ const AnnouncementBar = () => {
   const { data: settings = [] } = useSiteSettings();
   const text =
     settings.find((s: any) => s.key === "announcement_text")?.value ||
-    "Orders may take up to 2 weeks for shipping";
+    "Shipping may take up to 4 weeks, for more information check out FAQ";
 
   const chunk = `${text}\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0`;
-  const content = Array(6).fill(chunk).join("");
+  const repeated = Array(15).fill(chunk).join("");
 
   return (
     <div
-      className="w-full bg-primary text-primary-foreground py-2 z-[200] relative"
-      style={{ overflow: "hidden" }}
+      className="w-full bg-primary text-primary-foreground py-2 z-[200]"
+      style={{ overflow: "hidden", position: "relative" }}
     >
-      <style>{`
-        @keyframes ticker {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-100%); }
-        }
-        .ticker-track {
-          display: flex;
-          width: max-content;
-        }
-        .ticker-item {
-          white-space: nowrap;
-          font-family: Georgia, 'Times New Roman', serif;
-          font-size: 10px;
-          font-weight: bold;
-          letter-spacing: 0.15em;
-          animation: ticker 40s linear infinite;
-          padding-right: 0;
-          flex-shrink: 0;
-        }
-        .ticker-item:nth-child(2) {
-          animation-delay: -20s;
-        }
-      `}</style>
-      <div className="ticker-track">
-        <span className="ticker-item">{content}</span>
-        <span className="ticker-item">{content}</span>
+      <div
+        style={{
+          display: "inline-flex",       // inline-flex instead of flex
+          flexShrink: 0,
+          whiteSpace: "nowrap",
+          animation: "marquee 35s linear infinite",
+          willChange: "transform",
+        }}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            flexShrink: 0,
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontSize: "10px",
+            fontWeight: "bold",
+            letterSpacing: "0.15em",
+          }}
+        >
+          {repeated}
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-block",
+            flexShrink: 0,
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontSize: "10px",
+            fontWeight: "bold",
+            letterSpacing: "0.15em",
+          }}
+        >
+          {repeated}
+        </span>
       </div>
     </div>
   );
