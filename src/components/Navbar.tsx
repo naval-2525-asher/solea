@@ -7,27 +7,29 @@ import { useCart } from "@/context/CartContext";
 import { useSiteSettings } from "@/hooks/useAdminData";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
-const AnnouncementBar = () => {
+const const AnnouncementBar = () => {
   const { data: settings = [] } = useSiteSettings();
   const text =
     settings.find((s: any) => s.key === "announcement_text")?.value ||
     "Orders may take up to 2 weeks for shipping";
 
-  const repeated = Array(6)
-    .fill(`${text}\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0`)
-    .join("");
+  // More repetitions so there's always enough content on narrow screens
+  const chunk = `${text}\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0`;
+  const repeated = Array(10).fill(chunk).join("");
 
   return (
-    <div className="w-full bg-primary text-primary-foreground py-2 overflow-hidden z-[200] relative">
+    <div className="w-full bg-primary text-primary-foreground py-2 z-[200] relative" style={{ overflow: "hidden" }}>
       <div
-        className="font-serif text-[11px] tracking-[0.15em]" // ← removed "uppercase"
+        className="font-serif text-[10px] tracking-[0.15em] font-bold"
         style={{
           display: "flex",
           width: "max-content",
-          animation: "marquee 60s linear infinite", // ← 30s → 60s (slower)
+          animation: "marquee 60s linear infinite",
           whiteSpace: "nowrap",
+          willChange: "transform",
         }}
       >
+        {/* Two identical halves — animation moves exactly -50% so it loops seamlessly */}
         <span>{repeated}</span>
         <span aria-hidden="true">{repeated}</span>
       </div>
