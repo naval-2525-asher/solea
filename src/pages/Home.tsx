@@ -235,14 +235,14 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
           )}
         </div>
         <div className="p-3" style={{ flexGrow: 1 }}>
-          <p className="text-foreground font-serif font-bold text-sm">{product.name}</p>
+          <p className="text-foreground font-serif font-bold text-base">{product.name}</p>
           {salePrice !== undefined ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
+              <p className="font-serif text-sm" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
               <p className="font-serif text-sm font-bold" style={{ color: "#dc2626" }}>{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
             </div>
           ) : (
-            <p className="text-foreground font-serif text-sm opacity-70 mt-1">{formatPrice(product.price, product.price_gbp) || "—"}</p>
+            <p className="text-foreground font-serif text-sm font-bold mt-1">{formatPrice(product.price, product.price_gbp) || "—"}</p>
           )}
         </div>
       </div>

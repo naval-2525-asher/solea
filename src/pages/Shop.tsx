@@ -51,14 +51,14 @@ const ProductCard = ({ product, showNewBadge = false, viewMode = "triple", saleP
             }} />
         </div>
         <div className="p-3">
-          <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
+          <p className="text-foreground font-serif font-bold text-base mb-0.5">{product.name}</p>
           {salePrice ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
-              <p className="text-foreground font-serif text-xs font-bold">{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
+              <p className="font-serif text-sm" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
+              <p className="text-foreground font-serif text-sm font-bold">{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
             </div>
           ) : (
-            <p className="text-foreground font-serif font-bold text-xs">{formatPrice(product.price, product.price_gbp)}</p>
+            <p className="text-foreground font-serif font-bold text-sm">{formatPrice(product.price, product.price_gbp)}</p>
           )}
           {oos && (
             <button disabled style={{ marginTop: "0.5rem", width: "100%", background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", border: "none", borderRadius: "2rem", padding: "6px 0", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7 }}>

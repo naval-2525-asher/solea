@@ -7,14 +7,18 @@ import { useRegion } from "@/context/RegionContext";
 const isOutOfStock = (product: any) =>
   product.stock_status === "out_of_stock" || product.stock_status === "Out of Stock";
 
-const calcDiscount = (original: number, sale: number) =>
-  Math.round(((original - sale) / original) * 100);
+const calcDiscount = (item: any, region: string) => {
+  if (region === "UK" && item.sale_price_gbp && item.products?.price_gbp) {
+    return Math.round(((item.products.price_gbp - item.sale_price_gbp) / item.products.price_gbp) * 100);
+  }
+  return Math.round(((item.products.price - item.sale_price) / item.products.price) * 100);
+};
 
 const SaleCard = ({ item }: { item: any }) => {
   const product = item.products;
   const oos = isOutOfStock(product);
-  const discount = calcDiscount(product.price, item.sale_price);
   const { formatPrice, region } = useRegion();
+  const discount = calcDiscount(item, region);
   const href =
     product.category === "Accessories" || product.category === "Bagcharms"
       ? `/accessories/${product.id}`
@@ -62,13 +66,17 @@ const SaleCard = ({ item }: { item: any }) => {
           />
         </div>
         <div className="p-3">
-          <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
+          <p className="text-foreground font-serif font-bold text-base mb-0.5">{product.name}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <p className="font-serif text-xs" style={{ textDecoration: "line-through", opacity: 0.5 }}>
+            <p className="font-serif text-sm" style={{ textDecoration: "line-through", opacity: 0.5 }}>
               {formatPrice(product.price, product.price_gbp)}
             </p>
-            <p className="text-foreground font-serif text-xs font-bold">
-              {region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(item.sale_price).toLocaleString()}`}
+            <p className="text-foreground font-serif text-sm font-bold">
+              {region === "UK"
+                ? item.sale_price_gbp
+                  ? `£${Number(item.sale_price_gbp).toLocaleString("en-GB")}`
+                  : `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}`
+                : `Rs. ${Number(item.sale_price).toLocaleString()}`}
             </p>
           </div>
         </div>

@@ -57,6 +57,7 @@ export default function AdminStorefront() {
   const [saleOpen, setSaleOpen] = useState(false);
   const [saleProduct, setSaleProduct] = useState("");
   const [salePrice, setSalePrice] = useState("");
+  const [salePriceGbp, setSalePriceGbp] = useState("");
 
   const handleUploadBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -102,8 +103,13 @@ export default function AdminStorefront() {
     const already = saleProducts.some((s: any) => s.product_id === saleProduct);
     if (already) { toast.error("Product already on sale"); return; }
     try {
-      await upsertSale.mutateAsync({ product_id: saleProduct, sale_price: Number(salePrice), display_order: saleProducts.length + 1 });
-      setSaleOpen(false); setSaleProduct(""); setSalePrice("");
+      await upsertSale.mutateAsync({
+        product_id: saleProduct,
+        sale_price: Number(salePrice),
+        sale_price_gbp: salePriceGbp ? Number(salePriceGbp) : null,
+        display_order: saleProducts.length + 1,
+      });
+      setSaleOpen(false); setSaleProduct(""); setSalePrice(""); setSalePriceGbp("");
       toast.success("Added to Sale");
     } catch (e: any) { toast.error(e.message); }
   };
@@ -352,33 +358,66 @@ export default function AdminStorefront() {
           <DialogHeader><DialogTitle className="font-serif">Add Sale Product</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Label className="font-serif text-xs">Select Product</Label>
-            <Select value={saleProduct} onValueChange={setSaleProduct}>
+            <Select value={saleProduct} onValueChange={(v) => { setSaleProduct(v); setSalePrice(""); setSalePriceGbp(""); }}>
               <SelectTrigger className="font-serif text-sm"><SelectValue placeholder="Choose a product" /></SelectTrigger>
               <SelectContent>
                 {products.map((p: any) => (
                   <SelectItem key={p.id} value={p.id} className="font-serif">
-                    {p.name} — PKR {p.price.toLocaleString()}
+                    {p.name} — PKR {p.price.toLocaleString()}{p.price_gbp ? ` / £${Number(p.price_gbp).toLocaleString("en-GB")}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Label className="font-serif text-xs">Sale Price (PKR)</Label>
-            <Input
-              type="number"
-              value={salePrice}
-              onChange={(e) => setSalePrice(e.target.value)}
-              placeholder="e.g. 3500"
-              className="font-serif text-sm"
-            />
-            {saleProduct && salePrice && (
-              <p className="font-serif text-xs text-muted-foreground">
-                Original: PKR {products.find((p: any) => p.id === saleProduct)?.price?.toLocaleString()} →{" "}
-                <span className="text-red-500 font-bold">Sale: PKR {Number(salePrice).toLocaleString()}</span>
-              </p>
-            )}
+
+            {saleProduct && (() => {
+              const prod = products.find((p: any) => p.id === saleProduct);
+              return prod ? (
+                <p className="font-serif text-[11px] text-muted-foreground bg-secondary/40 rounded px-2 py-1.5">
+                  Original: <strong>PKR {prod.price?.toLocaleString()}</strong>
+                  {prod.price_gbp ? <> &nbsp;/&nbsp; <strong>£{Number(prod.price_gbp).toLocaleString("en-GB")}</strong></> : " (no GBP price set)"}
+                </p>
+              ) : null;
+            })()}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="font-serif text-xs">Sale Price (PKR 🇵🇰)</Label>
+                <Input
+                  type="number"
+                  value={salePrice}
+                  onChange={(e) => setSalePrice(e.target.value)}
+                  placeholder="e.g. 3500"
+                  className="font-serif text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="font-serif text-xs">Sale Price (GBP 🇬🇧)</Label>
+                <Input
+                  type="number"
+                  value={salePriceGbp}
+                  onChange={(e) => setSalePriceGbp(e.target.value)}
+                  placeholder="e.g. 28.99"
+                  className="font-serif text-sm"
+                />
+              </div>
+            </div>
+
+            {saleProduct && (salePrice || salePriceGbp) && (() => {
+              const prod = products.find((p: any) => p.id === saleProduct);
+              if (!prod) return null;
+              const pkrDiscount = salePrice && prod.price ? Math.round(((prod.price - Number(salePrice)) / prod.price) * 100) : null;
+              const gbpDiscount = salePriceGbp && prod.price_gbp ? Math.round(((prod.price_gbp - Number(salePriceGbp)) / prod.price_gbp) * 100) : null;
+              return (
+                <p className="font-serif text-xs text-muted-foreground">
+                  {pkrDiscount !== null && <span className="text-red-500 font-bold">PKR save {pkrDiscount}%</span>}
+                  {pkrDiscount !== null && gbpDiscount !== null && " · "}
+                  {gbpDiscount !== null && <span className="text-red-500 font-bold">GBP save {gbpDiscount}%</span>}
+                </p>
+              );
+            })()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSaleOpen(false)} className="font-serif">Cancel</Button>
+            <Button variant="outline" onClick={() => { setSaleOpen(false); setSalePriceGbp(""); }} className="font-serif">Cancel</Button>
             <Button onClick={handleAddSaleProduct} disabled={!saleProduct || !salePrice || upsertSale.isPending} className="font-serif">Add to Sale</Button>
           </DialogFooter>
         </DialogContent>

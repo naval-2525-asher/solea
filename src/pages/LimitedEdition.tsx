@@ -47,8 +47,8 @@ const ProductCard = ({ product, viewMode = "triple" }: { product: any; viewMode?
             }} />
         </div>
         <div className="p-3">
-          <p className="text-foreground font-serif font-bold text-sm mb-0.5">{product.name}</p>
-          <p className="text-foreground font-serif font-bold text-xs">{formatPrice(product.price, product.price_gbp)}</p>
+          <p className="text-foreground font-serif font-bold text-base mb-0.5">{product.name}</p>
+          <p className="text-foreground font-serif font-bold text-sm">{formatPrice(product.price, product.price_gbp)}</p>
           {oos && (
             <button disabled style={{ marginTop: "0.5rem", width: "100%", background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", border: "none", borderRadius: "2rem", padding: "6px 0", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7 }}>
               Add to Cart
