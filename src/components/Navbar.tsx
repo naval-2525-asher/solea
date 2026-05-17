@@ -36,12 +36,12 @@ import { useRegion, REGIONS, Region } from "@/context/RegionContext";
           font-size: 10px;
           font-weight: bold;
           letter-spacing: 0.15em;
-          animation: ticker 60s linear infinite;
+          animation: ticker 40s linear infinite;
           padding-right: 0;
           flex-shrink: 0;
         }
         .ticker-item:nth-child(2) {
-          animation-delay: -30s;
+          animation-delay: -20s;
         }
       `}</style>
       <div className="ticker-track">
