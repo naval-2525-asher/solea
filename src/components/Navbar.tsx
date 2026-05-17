@@ -7,31 +7,46 @@ import { useCart } from "@/context/CartContext";
 import { useSiteSettings } from "@/hooks/useAdminData";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
-const const AnnouncementBar = () => {
+  const AnnouncementBar = () => {
   const { data: settings = [] } = useSiteSettings();
   const text =
     settings.find((s: any) => s.key === "announcement_text")?.value ||
     "Orders may take up to 2 weeks for shipping";
 
-  // More repetitions so there's always enough content on narrow screens
   const chunk = `${text}\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0`;
-  const repeated = Array(10).fill(chunk).join("");
+  const content = Array(6).fill(chunk).join("");
 
   return (
-    <div className="w-full bg-primary text-primary-foreground py-2 z-[200] relative" style={{ overflow: "hidden" }}>
-      <div
-        className="font-serif text-[10px] tracking-[0.15em] font-bold"
-        style={{
-          display: "flex",
-          width: "max-content",
-          animation: "marquee 60s linear infinite",
-          whiteSpace: "nowrap",
-          willChange: "transform",
-        }}
-      >
-        {/* Two identical halves — animation moves exactly -50% so it loops seamlessly */}
-        <span>{repeated}</span>
-        <span aria-hidden="true">{repeated}</span>
+    <div
+      className="w-full bg-primary text-primary-foreground py-2 z-[200] relative"
+      style={{ overflow: "hidden" }}
+    >
+      <style>{`
+        @keyframes ticker {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-100%); }
+        }
+        .ticker-track {
+          display: flex;
+          width: max-content;
+        }
+        .ticker-item {
+          white-space: nowrap;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 10px;
+          font-weight: bold;
+          letter-spacing: 0.15em;
+          animation: ticker 60s linear infinite;
+          padding-right: 0;
+          flex-shrink: 0;
+        }
+        .ticker-item:nth-child(2) {
+          animation-delay: -30s;
+        }
+      `}</style>
+      <div className="ticker-track">
+        <span className="ticker-item">{content}</span>
+        <span className="ticker-item">{content}</span>
       </div>
     </div>
   );
