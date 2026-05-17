@@ -7,22 +7,35 @@ import { useCart } from "@/context/CartContext";
 import { useSiteSettings } from "@/hooks/useAdminData";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
-
-
 const AnnouncementBar = () => {
   const { data: settings = [] } = useSiteSettings();
-  const text = settings.find((s: any) => s.key === "announcement_text")?.value || "ORDERS MAY TAKE UP TO 2 WEEKS FOR SHIPPING";
+  const text =
+    settings.find((s: any) => s.key === "announcement_text")?.value ||
+    "Orders may take up to 2 weeks for shipping";
+
+  const repeated = Array(6)
+    .fill(`${text}\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0`)
+    .join("");
+
   return (
-    <div className="w-full bg-primary text-primary-foreground py-2 overflow-hidden whitespace-nowrap z-[200] relative">
-      <div className="animate-marquee inline-block font-serif text-[10px] tracking-[0.15em] uppercase max-w-none">
-        {Array(4).fill(`${text}\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0`).join("")}
+    <div className="w-full bg-primary text-primary-foreground py-2 overflow-hidden z-[200] relative">
+      <div
+        className="font-serif text-[11px] tracking-[0.15em]" // ← removed "uppercase"
+        style={{
+          display: "flex",
+          width: "max-content",
+          animation: "marquee 60s linear infinite", // ← 30s → 60s (slower)
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span>{repeated}</span>
+        <span aria-hidden="true">{repeated}</span>
       </div>
     </div>
   );
 };
 
 const FlagImg = ({ code, size = 20 }: { code: string; size?: number }) => {
-  // code: "PK" | "UK" — flagcdn uses lowercase ISO alpha-2; UK region = GB
   const iso = code === "UK" ? "gb" : code.toLowerCase();
   return (
     <img
@@ -61,7 +74,7 @@ const RegionSelector: React.FC = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-[700] min-w-[180px]">
+        <div className="absolute left-0 top-full mt-1.5 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-[700] min-w-[180px]">
           {(Object.values(REGIONS) as typeof REGIONS[Region][]).map((r) => (
             <button
               key={r.code}
@@ -87,7 +100,6 @@ const Navbar: React.FC = () => {
   const { totalItems } = useCart();
   const { formatPrice } = useRegion();
   const [menuOpen, setMenuOpen] = useState(false);
-
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -113,8 +125,6 @@ const Navbar: React.FC = () => {
   return (
     <>
       <AnnouncementBar />
-
-
 
       {/* Burger Menu Overlay */}
       {menuOpen && createPortal(
