@@ -135,7 +135,12 @@ const ProductDetail = () => {
 
   const saleItem = (saleData as any[]).find((s: any) => s.product_id === product.id);
   const salePrice = saleItem ? Number(saleItem.sale_price) + extraPrice : null;
-  const discount = salePrice ? Math.round(((product.price - saleItem.sale_price) / product.price) * 100) : null;
+  const salePriceGbp = saleItem?.sale_price_gbp != null ? Number(saleItem.sale_price_gbp) + extraPrice : null;
+  const discount = salePrice
+    ? region === "UK" && salePriceGbp && (dbProduct as any)?.price_gbp
+      ? Math.round((((dbProduct as any).price_gbp - saleItem.sale_price_gbp) / (dbProduct as any).price_gbp) * 100)
+      : Math.round(((product.price - saleItem.sale_price) / product.price) * 100)
+    : null;
 
   const handleTypeChange = (type: "tee" | "tank") => {
     setSelectedType(type);
@@ -188,7 +193,7 @@ const ProductDetail = () => {
     });
 
     const regionPrice = region === "UK"
-      ? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice)
+      ? (salePriceGbp ?? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice))
       : (salePrice ?? displayPrice);
 
     addToCart({
@@ -312,13 +317,15 @@ const ProductDetail = () => {
             <div className="flex items-center gap-3 mb-8">
               <p className="text-foreground font-serif text-2xl font-bold">
                 {region === "UK"
-                  ? `£${(((dbProduct as any)?.price_gbp ?? 0) + extraPrice).toLocaleString("en-GB")}`
+                  ? salePriceGbp
+                    ? `£${salePriceGbp.toLocaleString("en-GB")}`
+                    : `£${(((dbProduct as any)?.price_gbp ?? 0) + extraPrice).toLocaleString("en-GB")}`
                   : `Rs. ${salePrice.toLocaleString()}`}
               </p>
               <p className="font-serif text-lg" style={{ textDecoration: "line-through", opacity: 0.45 }}>
                 {formatPrice(displayPrice, (dbProduct as any)?.price_gbp ?? 0)}
               </p>
-              {region === "PK" && (
+              {discount !== null && (
                 <span style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "3px 10px", borderRadius: "2rem" }}>
                   -{discount}%
                 </span>

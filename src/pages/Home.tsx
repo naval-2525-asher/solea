@@ -213,7 +213,7 @@ const SpottedSection = () => {
 };
 
 // ── Product Card ──────────────────────────────────────────────────────────────
-const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number }) => {
+const ProductCard = ({ product, salePrice, salePriceGbp }: { product: any; salePrice?: number; salePriceGbp?: number }) => {
   const { formatPrice, region } = useRegion();
   const href = product.category === "Accessories" || product.category === "Bagcharms"
     ? `/accessories/${product.id}` : `/product/${product.id}`;
@@ -228,18 +228,29 @@ const ProductCard = ({ product, salePrice }: { product: any; salePrice?: number 
               <span className="text-3xl">🪡</span>
             </div>
           )}
-          {salePrice !== undefined && (
-            <span style={{ position: "absolute", top: 10, left: 10, background: "#dc2626", color: "white", fontFamily: "serif", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>
-              -{calcDiscount(product.price, salePrice)}%
-            </span>
-          )}
+          {salePrice !== undefined && (() => {
+            const discountPct = region === "UK" && salePriceGbp && product.price_gbp
+              ? Math.round(((product.price_gbp - salePriceGbp) / product.price_gbp) * 100)
+              : calcDiscount(product.price, salePrice);
+            return (
+              <span style={{ position: "absolute", top: 10, left: 10, background: "#dc2626", color: "white", fontFamily: "serif", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>
+                -{discountPct}%
+              </span>
+            );
+          })()}
         </div>
         <div className="p-3" style={{ flexGrow: 1 }}>
           <p className="text-foreground font-serif font-bold text-base">{product.name}</p>
           {salePrice !== undefined ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
               <p className="font-serif text-sm" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
-              <p className="font-serif text-sm font-bold" style={{ color: "#dc2626" }}>{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
+              <p className="font-serif text-sm font-bold" style={{ color: "#dc2626" }}>
+                {region === "UK"
+                  ? salePriceGbp
+                    ? `£${Number(salePriceGbp).toLocaleString("en-GB")}`
+                    : `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}`
+                  : `Rs. ${Number(salePrice).toLocaleString()}`}
+              </p>
             </div>
           ) : (
             <p className="text-foreground font-serif text-sm font-bold mt-1">{formatPrice(product.price, product.price_gbp) || "—"}</p>
@@ -625,7 +636,7 @@ const Home = () => {
             </Reveal>
             <ProductCarousel
               items={validSaleItems}
-              renderCard={(s, i) => <ProductCard key={s.id} product={s.products} salePrice={s.sale_price} />}
+              renderCard={(s, i) => <ProductCard key={s.id} product={s.products} salePrice={s.sale_price} salePriceGbp={s.sale_price_gbp} />}
             />
           </section>
         )}
