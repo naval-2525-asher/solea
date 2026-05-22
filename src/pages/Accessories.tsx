@@ -13,7 +13,10 @@ export const accessoryProductsStatic = [
     name: "Bag Charms",
     price: 2500,
     image: "/accessories/bag-charm.jpeg",
-    variants: [{ label: "Style", name: "Chilli Charm", price_diff: 0 }, { label: "Style", name: "Olive Charm", price_diff: 0 }],
+    variants: [
+      { label: "Style", name: "Chilli Charm", price_diff: 0 },
+      { label: "Style", name: "Olive Charm", price_diff: 0 },
+    ],
   },
   {
     id: "beaded-bag-charm",
@@ -44,11 +47,22 @@ const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
   return { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" };
 };
 
-const ProductCard = ({ product, viewMode = "triple", salePrice }: { product: any; viewMode?: ViewMode; salePrice?: number }) => {
+const ProductCard = ({
+  product,
+  viewMode = "triple",
+  salePrice,
+  salePriceGbp,
+}: {
+  product: any;
+  viewMode?: ViewMode;
+  salePrice?: number;
+  salePriceGbp?: number;
+}) => {
   const oos = isOutOfStock(product);
   const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
   const discount = salePrice ? calcDiscount(product.price, salePrice) : null;
   const { formatPrice, region } = useRegion();
+
   return (
     <Link to={`/accessories/${product.id}`} className="no-underline">
       <div
@@ -56,40 +70,91 @@ const ProductCard = ({ product, viewMode = "triple", salePrice }: { product: any
         style={{ opacity: oos ? 0.85 : 1 }}
       >
         {discount && !oos && (
-          <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "4px 10px", borderRadius: "2rem" }}>
+          <div
+            style={{
+              position: "absolute", top: 8, right: 8, zIndex: 10,
+              background: "hsl(var(--foreground))", color: "hsl(var(--background))",
+              fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem",
+              padding: "4px 10px", borderRadius: "2rem",
+            }}
+          >
             -{discount}%
           </div>
         )}
         {oos && (
-          <div style={{ position: "absolute", top: 8, left: 8, zIndex: 10, background: "hsl(0 84.2% 60.2%)", color: "#fff", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 900, fontSize: "0.62rem", letterSpacing: "0.15em", textTransform: "uppercase", padding: "4px 10px", borderRadius: "2rem" }}>
+          <div
+            style={{
+              position: "absolute", top: 8, left: 8, zIndex: 10,
+              background: "hsl(0 84.2% 60.2%)", color: "#fff",
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontWeight: 900, fontSize: "0.62rem", letterSpacing: "0.15em",
+              textTransform: "uppercase", padding: "4px 10px", borderRadius: "2rem",
+            }}
+          >
             Out of Stock
           </div>
         )}
         {!oos && isLowStock(product) && (
-          <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, background: "#FEF08A", color: "#854D0E", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "11px", padding: "3px 10px", borderRadius: "999px", boxShadow: "0 1px 4px rgba(0,0,0,0.10)" }}>
+          <div
+            style={{
+              position: "absolute", top: 8, right: 8, zIndex: 10,
+              background: "#FEF08A", color: "#854D0E",
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontWeight: 700, fontSize: "11px", padding: "3px 10px",
+              borderRadius: "999px", boxShadow: "0 1px 4px rgba(0,0,0,0.10)",
+            }}
+          >
             Few items left
           </div>
         )}
-        <div className="bg-solea-warm flex items-center justify-center overflow-hidden" style={{ height: imgHeight, transition: "height 0.3s ease" }}>
-          <img src={product.image} alt={product.name} className="w-full h-full object-cover"
+        <div
+          className="bg-solea-warm flex items-center justify-center overflow-hidden"
+          style={{ height: imgHeight, transition: "height 0.3s ease" }}
+        >
+          <img
+            src={product.image}
+            alt={product.name}
+            className="w-full h-full object-cover"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
               const p = (e.currentTarget as HTMLImageElement).parentElement;
               if (p) p.innerHTML = '<span style="font-size:2rem">🌶️</span>';
-            }} />
+            }}
+          />
         </div>
         <div className="p-3">
           <p className="text-foreground font-serif font-bold text-base mb-0.5">{product.name}</p>
           {salePrice ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <p className="font-serif text-sm" style={{ textDecoration: "line-through", opacity: 0.5 }}>{formatPrice(product.price, product.price_gbp)}</p>
-              <p className="text-foreground font-serif text-sm font-bold">{region === "UK" ? `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}` : `Rs. ${Number(salePrice).toLocaleString()}`}</p>
+              <p
+                className="font-serif text-sm"
+                style={{ textDecoration: "line-through", opacity: 0.5 }}
+              >
+                {formatPrice(product.price, product.price_gbp)}
+              </p>
+              <p className="text-foreground font-serif text-sm font-bold">
+                {region === "UK"
+                  ? `£${Number(salePriceGbp ?? product.price_gbp ?? 0).toLocaleString("en-GB")}`
+                  : `Rs. ${Number(salePrice).toLocaleString()}`}
+              </p>
             </div>
           ) : (
-            <p className="text-foreground font-serif font-bold text-sm">{formatPrice(product.price, product.price_gbp)}</p>
+            <p className="text-foreground font-serif font-bold text-sm">
+              {formatPrice(product.price, product.price_gbp)}
+            </p>
           )}
           {oos && (
-            <button disabled style={{ marginTop: "0.5rem", width: "100%", background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", border: "none", borderRadius: "2rem", padding: "6px 0", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7 }}>
+            <button
+              disabled
+              style={{
+                marginTop: "0.5rem", width: "100%",
+                background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))",
+                border: "none", borderRadius: "2rem", padding: "6px 0",
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.15em",
+                textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7,
+              }}
+            >
               Add to Cart
             </button>
           )}
@@ -102,12 +167,20 @@ const ProductCard = ({ product, viewMode = "triple", salePrice }: { product: any
 const Accessories = () => {
   const { data: dbProducts = [], isLoading } = useProducts();
   const { data: saleData = [] } = useSaleProducts();
-  const salePriceMap = Object.fromEntries((saleData as any[]).map((s: any) => [s.product_id, s.sale_price]));
+
+  // Map includes both PKR and GBP sale prices
+  const salePriceMap = Object.fromEntries(
+    (saleData as any[]).map((s: any) => [
+      s.product_id,
+      { sale_price: s.sale_price, sale_price_gbp: s.sale_price_gbp },
+    ])
+  );
+
   const dbAccessories = dbProducts.filter((p: any) => p.category === "Accessories");
   const displayProducts = dbAccessories.length > 0 ? dbAccessories : accessoryProductsStatic;
 
-  // Set initial viewMode based on screen size ONCE — never override after user changes it
-  const initialViewMode = (): ViewMode => (typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple");
+  const initialViewMode = (): ViewMode =>
+    typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple";
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const userChangedView = useRef(false);
 
@@ -132,7 +205,9 @@ const Accessories = () => {
     <main className="min-h-screen">
       <Navbar />
       <div className="py-8 px-8 text-center">
-        <h1 className="text-foreground font-serif text-4xl font-black max-w-[300px] mx-auto">Accessories</h1>
+        <h1 className="text-foreground font-serif text-4xl font-black max-w-[300px] mx-auto">
+          Accessories
+        </h1>
       </div>
       <div className="px-6 pb-16 max-w-[1100px] mx-auto">
         {!isLoading && (
@@ -153,7 +228,10 @@ const Accessories = () => {
         {isLoading ? (
           <div style={getGridStyle(viewMode)}>
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-card rounded-lg overflow-hidden border border-border animate-pulse">
+              <div
+                key={i}
+                className="bg-card rounded-lg overflow-hidden border border-border animate-pulse"
+              >
                 <div className="h-[340px] bg-secondary/50" />
                 <div className="p-3 space-y-2">
                   <div className="h-3 bg-secondary/50 rounded w-3/4" />
@@ -165,12 +243,31 @@ const Accessories = () => {
         ) : sorted.length > 0 ? (
           <div style={getGridStyle(viewMode)}>
             {sorted.map((product: any) => (
-              <ProductCard key={product.id} product={product} viewMode={viewMode} salePrice={salePriceMap[product.id]} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                viewMode={viewMode}
+                salePrice={salePriceMap[product.id]?.sale_price}
+                salePriceGbp={salePriceMap[product.id]?.sale_price_gbp}
+              />
             ))}
           </div>
         ) : (
-          <div style={{ minHeight: "30vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.9rem", color: "hsl(var(--muted-foreground))" }}>
+          <div
+            style={{
+              minHeight: "30vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontSize: "0.9rem",
+                color: "hsl(var(--muted-foreground))",
+              }}
+            >
               No products match your filters.
             </p>
           </div>
