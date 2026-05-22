@@ -281,7 +281,7 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
   // Desktop: 52px side padding to clear the arrows, 24px gap between cards (matches Shop by Category)
   // Mobile:  12px side padding, 8px gap (tight, same as before)
   const sidePadding = isMobile ? "12px" : "52px";
-  const cardGap = isMobile ? "8px" : "24px";
+  const cardGap = isMobile ? "8px" : "34px";
 
   return (
     <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto" }}>
