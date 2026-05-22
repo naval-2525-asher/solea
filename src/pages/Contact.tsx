@@ -17,23 +17,51 @@ const SendIcon = () => (
   </svg>
 );
 
+// ── EmailJS credentials ───────────────────────────────────────────────────────
+const EMAILJS_SERVICE_ID  = "service_8jsvebo";
+const EMAILJS_TEMPLATE_ID = "template_gmfg36t";
+const EMAILJS_PUBLIC_KEY  = "BDRxg5W8H7JoehRk2"; // ← paste from Account → Public Key
+
 const Contact = () => {
   const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = (e: React.MouseEvent) => {
+  const handleSubmit = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone || !form.email || !form.message) return;
-    const subject = encodeURIComponent(`Message from ${form.name} — solea.khi`);
-    const body = encodeURIComponent(
-      `Name: ${form.name}\nPhone: ${form.phone}\nEmail: ${form.email}\n\nMessage:\n${form.message}`
-    );
-    window.location.href = `mailto:shopsoleakhi@gmail.com?subject=${subject}&body=${body}`;
-    setSubmitted(true);
+
+    setStatus("sending");
+
+    try {
+      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_id:  EMAILJS_SERVICE_ID,
+          template_id: EMAILJS_TEMPLATE_ID,
+          user_id:     EMAILJS_PUBLIC_KEY,
+          template_params: {
+            from_name:  form.name,
+            from_phone: form.phone,
+            from_email: form.email,
+            message:    form.message,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        setStatus("success");
+        setForm({ name: "", phone: "", email: "", message: "" });
+      } else {
+        setStatus("error");
+      }
+    } catch {
+      setStatus("error");
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -59,6 +87,8 @@ const Contact = () => {
     marginBottom: "6px",
   };
 
+  const isValid = !!(form.name && form.phone && form.email && form.message);
+
   return (
     <div style={{ minHeight: "100vh", background: "hsl(var(--background))", fontFamily: "Georgia, serif" }}>
       <Navbar />
@@ -75,15 +105,7 @@ const Contact = () => {
 
       {/* Main layout */}
       <div
-        style={{
-          maxWidth: "1000px",
-          margin: "0 auto",
-          padding: "0 24px 80px",
-          display: "grid",
-          gridTemplateColumns: "1fr 2fr",
-          gap: "40px",
-          alignItems: "start",
-        }}
+        style={{ maxWidth: "1000px", margin: "0 auto", padding: "0 24px 80px", display: "grid", gridTemplateColumns: "1fr 2fr", gap: "40px", alignItems: "start" }}
         className="contact-grid"
       >
         <style>{`
@@ -103,16 +125,10 @@ const Contact = () => {
 
         {/* Left — Info Panel */}
         <div className="contact-info-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
           <div style={{ background: "hsl(var(--card))", border: "1.5px solid hsl(var(--border))", borderRadius: "20px", padding: "28px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-            <p style={{ fontWeight: 900, fontSize: "16px", color: "hsl(var(--foreground))", margin: "0 0 4px", letterSpacing: "0.05em" }}>
-              Get in touch
-            </p>
+            <p style={{ fontWeight: 900, fontSize: "16px", color: "hsl(var(--foreground))", margin: "0 0 4px", letterSpacing: "0.05em" }}>Get in touch</p>
 
-            <a
-              href="mailto:shopsoleakhi@gmail.com"
-              style={{ display: "flex", alignItems: "flex-start", gap: "12px", textDecoration: "none", color: "inherit" }}
-            >
+            <a href="mailto:shopsoleakhi@gmail.com" style={{ display: "flex", alignItems: "flex-start", gap: "12px", textDecoration: "none", color: "inherit" }}>
               <span style={{ fontSize: "20px", flexShrink: 0, marginTop: "1px" }}>✉️</span>
               <div>
                 <p style={{ fontSize: "11px", letterSpacing: "0.15em", opacity: 0.5, margin: "0 0 3px", textTransform: "uppercase" }}>Email</p>
@@ -128,12 +144,7 @@ const Contact = () => {
               </div>
             </div>
 
-            <a
-              href="https://www.instagram.com/solea.khi"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "flex", alignItems: "flex-start", gap: "12px", textDecoration: "none", color: "inherit" }}
-            >
+            <a href="https://www.instagram.com/solea.khi" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "flex-start", gap: "12px", textDecoration: "none", color: "inherit" }}>
               <span style={{ fontSize: "20px", flexShrink: 0, marginTop: "1px" }}>📷</span>
               <div>
                 <p style={{ fontSize: "11px", letterSpacing: "0.15em", opacity: 0.5, margin: "0 0 3px", textTransform: "uppercase" }}>Instagram</p>
@@ -150,27 +161,11 @@ const Contact = () => {
             </div>
           </div>
 
-          {/* Instagram CTA */}
           <a
             href="https://www.instagram.com/solea.khi"
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              padding: "14px",
-              borderRadius: "16px",
-              background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 30px, hsl(var(--solea-beige)) 30px, hsl(var(--solea-beige)) 60px)",
-              textDecoration: "none",
-              color: "hsl(var(--foreground))",
-              fontFamily: "Georgia, serif",
-              fontSize: "13px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              transition: "opacity 0.2s",
-            }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "14px", borderRadius: "16px", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 30px, hsl(var(--solea-beige)) 30px, hsl(var(--solea-beige)) 60px)", textDecoration: "none", color: "hsl(var(--foreground))", fontFamily: "Georgia, serif", fontSize: "13px", fontWeight: 700, letterSpacing: "0.08em", transition: "opacity 0.2s" }}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
@@ -182,25 +177,19 @@ const Contact = () => {
         {/* Right — Form */}
         <div
           className="contact-form-panel"
-          style={{
-            background: "hsl(var(--card))",
-            border: "1.5px solid hsl(var(--border))",
-            borderRadius: "24px",
-            padding: "36px 32px",
-            boxShadow: "0 4px 24px hsl(var(--primary) / 0.06)",
-          }}
+          style={{ background: "hsl(var(--card))", border: "1.5px solid hsl(var(--border))", borderRadius: "24px", padding: "36px 32px", boxShadow: "0 4px 24px hsl(var(--primary) / 0.06)" }}
         >
           <p style={{ fontWeight: 900, fontSize: "20px", color: "hsl(var(--foreground))", margin: "0 0 28px", letterSpacing: "0.02em" }}>
             Send us a Message
           </p>
 
-          {submitted ? (
+          {status === "success" ? (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <p style={{ fontSize: "32px", margin: "0 0 12px" }}>✉️</p>
+              <p style={{ fontSize: "36px", margin: "0 0 12px" }}>✉️</p>
               <p style={{ fontWeight: 700, fontSize: "16px", color: "hsl(var(--foreground))", margin: "0 0 8px" }}>Message sent!</p>
               <p style={{ fontSize: "13px", opacity: 0.65, margin: "0 0 24px" }}>We'll get back to you within 24 hours.</p>
               <button
-                onClick={() => { setSubmitted(false); setForm({ name: "", phone: "", email: "", message: "" }); }}
+                onClick={() => setStatus("idle")}
                 style={{ background: "transparent", border: "1.5px solid hsl(var(--primary))", borderRadius: "999px", color: "hsl(var(--primary))", fontFamily: "Georgia, serif", fontSize: "13px", fontWeight: 700, padding: "10px 28px", cursor: "pointer", letterSpacing: "0.1em" }}
               >
                 Send Another
@@ -208,96 +197,48 @@ const Contact = () => {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
               <div>
-                <label style={labelStyle}>
-                  Name <span style={{ color: "hsl(var(--primary))" }}>*</span>
-                </label>
-                <input
-                  name="name"
-                  type="text"
-                  placeholder="Your name"
-                  value={form.name}
-                  onChange={handleChange}
-                  className="contact-input"
-                  style={inputStyle}
-                />
+                <label style={labelStyle}>Name <span style={{ color: "hsl(var(--primary))" }}>*</span></label>
+                <input name="name" type="text" placeholder="Your name" value={form.name} onChange={handleChange} className="contact-input" style={inputStyle} />
               </div>
 
               <div>
-                <label style={labelStyle}>
-                  Phone Number <span style={{ color: "hsl(var(--primary))" }}>*</span>
-                </label>
-                <input
-                  name="phone"
-                  type="tel"
-                  placeholder="03XX XXXXXXX"
-                  value={form.phone}
-                  onChange={handleChange}
-                  className="contact-input"
-                  style={inputStyle}
-                />
+                <label style={labelStyle}>Phone Number <span style={{ color: "hsl(var(--primary))" }}>*</span></label>
+                <input name="phone" type="tel" placeholder="03XX XXXXXXX" value={form.phone} onChange={handleChange} className="contact-input" style={inputStyle} />
               </div>
 
               <div>
-                <label style={labelStyle}>
-                  Email <span style={{ color: "hsl(var(--primary))" }}>*</span>
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={form.email}
-                  onChange={handleChange}
-                  className="contact-input"
-                  style={inputStyle}
-                />
+                <label style={labelStyle}>Email <span style={{ color: "hsl(var(--primary))" }}>*</span></label>
+                <input name="email" type="email" placeholder="your@email.com" value={form.email} onChange={handleChange} className="contact-input" style={inputStyle} />
               </div>
 
               <div>
-                <label style={labelStyle}>
-                  Message <span style={{ color: "hsl(var(--primary))" }}>*</span>
-                </label>
-                <textarea
-                  name="message"
-                  placeholder="Write your message here…"
-                  value={form.message}
-                  onChange={handleChange}
-                  rows={5}
-                  className="contact-input"
-                  style={{ ...inputStyle, resize: "vertical", minHeight: "120px" }}
-                />
+                <label style={labelStyle}>Message <span style={{ color: "hsl(var(--primary))" }}>*</span></label>
+                <textarea name="message" placeholder="Write your message here…" value={form.message} onChange={handleChange} rows={5} className="contact-input" style={{ ...inputStyle, resize: "vertical", minHeight: "120px" }} />
               </div>
+
+              {status === "error" && (
+                <p style={{ fontFamily: "Georgia, serif", fontSize: "13px", color: "hsl(var(--destructive))", margin: 0 }}>
+                  Something went wrong. Please email us directly at shopsoleakhi@gmail.com
+                </p>
+              )}
 
               <button
                 onClick={handleSubmit}
-                disabled={!form.name || !form.phone || !form.email || !form.message}
+                disabled={!isValid || status === "sending"}
                 style={{
-                  width: "100%",
-                  padding: "16px",
-                  borderRadius: "999px",
-                  border: "none",
-                  background: (!form.name || !form.phone || !form.email || !form.message)
-                    ? "hsl(var(--solea-pink) / 0.5)"
-                    : "hsl(var(--solea-pink))",
-                  color: "hsl(var(--foreground))",
-                  fontFamily: "Georgia, serif",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  cursor: (!form.name || !form.phone || !form.email || !form.message) ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  transition: "opacity 0.2s, background 0.2s",
-                  marginTop: "4px",
+                  width: "100%", padding: "16px", borderRadius: "999px", border: "none",
+                  background: (!isValid || status === "sending") ? "hsl(var(--solea-pink) / 0.5)" : "hsl(var(--solea-pink))",
+                  color: "hsl(var(--foreground))", fontFamily: "Georgia, serif", fontSize: "14px",
+                  fontWeight: 700, letterSpacing: "0.1em",
+                  cursor: (!isValid || status === "sending") ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  transition: "opacity 0.2s, background 0.2s", marginTop: "4px",
                 }}
-                onMouseEnter={(e) => { if (form.name && form.phone && form.email && form.message) (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+                onMouseEnter={(e) => { if (isValid && status !== "sending") (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
               >
-                <SendIcon />
-                Send Message
+                {status === "sending" ? "Sending…" : <><SendIcon /> Send Message</>}
               </button>
             </div>
           )}
