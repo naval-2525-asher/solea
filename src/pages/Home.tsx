@@ -177,22 +177,23 @@ const SpottedSection = () => {
           )}
         </div>
 
-        {isMobile && totalPages > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18 }}>
+        {totalPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20 }}>
             {Array.from({ length: totalPages }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => goTo(i)}
                 style={{
-                  background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1,
-                  fontSize: i === currentPage ? 20 : 14,
-                  opacity: i === currentPage ? 1 : 0.3,
-                  transform: i === currentPage ? "scale(1.15)" : "scale(1)",
-                  transition: "all 0.25s ease",
+                  width: i === currentPage ? 24 : 8,
+                  height: 8,
+                  borderRadius: 4,
+                  border: "none",
+                  background: i === currentPage ? "#8B1A2F" : "#d1a0a8",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  padding: 0,
                 }}
-              >
-                🌸
-              </button>
+              />
             ))}
           </div>
         )}
@@ -281,7 +282,7 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
   // Desktop: 52px side padding to clear the arrows, 24px gap between cards (matches Shop by Category)
   // Mobile:  12px side padding, 8px gap (tight, same as before)
   const sidePadding = isMobile ? "12px" : "52px";
-  const cardGap = isMobile ? "8px" : "34px";
+  const cardGap = isMobile ? "8px" : "24px";
 
   return (
     <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto" }}>
