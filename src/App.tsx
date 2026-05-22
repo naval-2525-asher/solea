@@ -28,8 +28,8 @@ import AdminStorefront from "./pages/admin/AdminStorefront";
 import AdminInventory from "./pages/admin/AdminInventory";
 import AdminSettings from "./pages/admin/AdminSettings";
 import FAQ from "./pages/FAQ";
+import Contact from "./pages/Contact"; // ← new
 
-// Shop-like pages where we want scroll position restored on back-navigation
 const SCROLL_RESTORE_PATHS = ["/shop", "/accessories", "/limited-edition", "/sale", "/bagcharms"];
 
 const ScrollManager = () => {
@@ -38,7 +38,6 @@ const ScrollManager = () => {
 
   useEffect(() => {
     const key = `scrollPos:${pathname}`;
-
     const navEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     const isBackForward = navEntry?.type === "back_forward"
       || (
@@ -66,10 +65,8 @@ const ScrollManager = () => {
 
   useEffect(() => {
     if (!SCROLL_RESTORE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
-
     const key = `scrollPos:${pathname}`;
     const handler = () => sessionStorage.setItem(key, String(window.scrollY));
-
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, [pathname]);
@@ -83,38 +80,39 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <RegionProvider>
-      <CartProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <ScrollManager />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/shop" element={<Shop />} />
-            <Route path="/bagcharms" element={<Bagcharms />} />
-            <Route path="/limited-edition" element={<LimitedEdition />} />
-            <Route path="/accessories" element={<Accessories />} />
-            <Route path="/accessories/:id" element={<AccessoryDetail />} />
-            <Route path="/product/:id" element={<ProductDetail />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/sale" element={<Sale />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminOverview />} />
-              <Route path="orders" element={<AdminOrders />} />
-              <Route path="customers" element={<AdminCustomers />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="reviews" element={<AdminReviews />} />
-              <Route path="spotted" element={<AdminSpotted />} />
-              <Route path="storefront" element={<AdminStorefront />} />
-              <Route path="inventory" element={<AdminInventory />} />
-              <Route path="settings" element={<AdminSettings />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </CartProvider>
+        <CartProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <ScrollManager />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/shop" element={<Shop />} />
+              <Route path="/bagcharms" element={<Bagcharms />} />
+              <Route path="/limited-edition" element={<LimitedEdition />} />
+              <Route path="/accessories" element={<Accessories />} />
+              <Route path="/accessories/:id" element={<AccessoryDetail />} />
+              <Route path="/product/:id" element={<ProductDetail />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/sale" element={<Sale />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/contact" element={<Contact />} /> {/* ← new */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminOverview />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="customers" element={<AdminCustomers />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="reviews" element={<AdminReviews />} />
+                <Route path="spotted" element={<AdminSpotted />} />
+                <Route path="storefront" element={<AdminStorefront />} />
+                <Route path="inventory" element={<AdminInventory />} />
+                <Route path="settings" element={<AdminSettings />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </CartProvider>
       </RegionProvider>
     </TooltipProvider>
   </QueryClientProvider>
