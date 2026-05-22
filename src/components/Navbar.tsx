@@ -27,7 +27,7 @@ const AnnouncementBar = () => {
           display: "inline-flex",
           flexShrink: 0,
           whiteSpace: "nowrap",
-          animation: "marquee 80s linear infinite",
+          animation: "marquee 150s linear infinite",
           willChange: "transform",
         }}
       >
