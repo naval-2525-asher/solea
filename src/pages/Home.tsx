@@ -93,8 +93,6 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => {
 };
 
 // ── Spotted Section ───────────────────────────────────────────────────────────
-// Desktop: arrow nav, 1000px wide (matches Shop by Category)
-// Mobile:  no arrows (zero dead space), cute 🌸 dot nav below
 const SpottedSection = () => {
   const { data: dbImages = [] } = useSpottedImages();
   const images = dbImages.length > 0 ? dbImages.map((img: any) => img.image) : fallbackSpotted;
@@ -137,18 +135,14 @@ const SpottedSection = () => {
         <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">our community wearing their favorites</p>
       </div>
 
-      {/* Container — 1000px on desktop (same as Shop by Category), full width on mobile */}
       <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto", padding: isMobile ? "0 12px" : "0 32px" }}>
         <div style={{ position: "relative" }}>
-
-          {/* ← Desktop arrow only */}
           {!isMobile && (
             <button onClick={prev} className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors" style={{ left: -28, top: "45%", transform: "translateY(-50%)", width: 40, height: 40 }}>
               <ChevronLeft className="h-5 w-5 text-foreground" />
             </button>
           )}
 
-          {/* Image grid */}
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: isMobile ? "8px" : "16px" }}>
             {visibleImages.map(({ src, key }, gridIdx) => (
               <div key={key} style={{ position: "relative", borderRadius: "16px", overflow: "hidden", aspectRatio: "3/4" }}>
@@ -160,7 +154,6 @@ const SpottedSection = () => {
                   onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.03)")}
                   onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
                 />
-                {/* Mobile tap arrows — left on first col, right on last col */}
                 {isMobile && gridIdx === 0 && (
                   <button onClick={(e) => { e.stopPropagation(); prev(); }}
                     style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.82)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.15)", zIndex: 5 }}>
@@ -177,7 +170,6 @@ const SpottedSection = () => {
             ))}
           </div>
 
-          {/* → Desktop arrow only */}
           {!isMobile && (
             <button onClick={next} className="absolute z-10 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors" style={{ right: -28, top: "45%", transform: "translateY(-50%)", width: 40, height: 40 }}>
               <ChevronRight className="h-5 w-5 text-foreground" />
@@ -185,7 +177,6 @@ const SpottedSection = () => {
           )}
         </div>
 
-        {/* 🌸 Mobile dot nav — no arrows, zero dead space */}
         {isMobile && totalPages > 1 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 18 }}>
             {Array.from({ length: totalPages }).map((_, i) => (
@@ -261,9 +252,7 @@ const ProductCard = ({ product, salePrice, salePriceGbp }: { product: any; saleP
   );
 };
 
-// ── Product Carousel ─────────────────────────────────────────────────────────
-// Desktop: arrow nav + dots, 1000px (matches Shop by Category)
-// Mobile:  no arrows (zero dead space), dots only
+// ── Product Carousel ──────────────────────────────────────────────────────────
 const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (item: any, i: number) => React.ReactNode }) => {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(3);
@@ -289,20 +278,29 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
 
   if (items.length === 0) return null;
 
+  // Desktop: 52px side padding to clear the arrows, 24px gap between cards (matches Shop by Category)
+  // Mobile:  12px side padding, 8px gap (tight, same as before)
+  const sidePadding = isMobile ? "12px" : "52px";
+  const cardGap = isMobile ? "8px" : "24px";
+
   return (
     <div style={{ maxWidth: isMobile ? "100%" : "1000px", margin: "0 auto" }}>
-      <div style={{ position: "relative", paddingLeft: isMobile ? "12px" : "52px", paddingRight: isMobile ? "12px" : "52px" }}>
+      <div style={{ position: "relative", paddingLeft: sidePadding, paddingRight: sidePadding }}>
+
         {/* ← Desktop arrow */}
         {!isMobile && (
-          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
             className="absolute left-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ top: "38%", transform: "translateY(-50%)" }}>
+            style={{ top: "38%", transform: "translateY(-50%)" }}
+          >
             <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
         )}
 
         <div
-          style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: "12px", position: "relative" }}
+          style={{ display: "grid", gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: cardGap, position: "relative" }}
           onTouchStart={(e) => {
             touchStartX.current = e.touches[0].clientX;
             touchStartY.current = e.touches[0].clientY;
@@ -311,10 +309,9 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
             if (touchStartX.current === null || touchStartY.current === null) return;
             const dx = e.changedTouches[0].clientX - touchStartX.current;
             const dy = e.changedTouches[0].clientY - touchStartY.current;
-            // Only swipe if horizontal movement dominates (not a scroll)
             if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-              if (dx < 0) setPage((p) => Math.min(totalPages - 1, p + 1)); // swipe left → next
-              else        setPage((p) => Math.max(0, p - 1));               // swipe right → prev
+              if (dx < 0) setPage((p) => Math.min(totalPages - 1, p + 1));
+              else        setPage((p) => Math.max(0, p - 1));
             }
             touchStartX.current = null;
             touchStartY.current = null;
@@ -348,18 +345,26 @@ const ProductCarousel = ({ items, renderCard }: { items: any[]; renderCard: (ite
 
         {/* → Desktop arrow */}
         {!isMobile && (
-          <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
             className="absolute right-0 z-10 w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ top: "38%", transform: "translateY(-50%)" }}>
+            style={{ top: "38%", transform: "translateY(-50%)" }}
+          >
             <ChevronRight className="h-4 w-4 text-foreground" />
           </button>
         )}
       </div>
-      {/* Dots — both, but sole nav on mobile */}
+
+      {/* Dots */}
       {totalPages > 1 && (
         <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20 }}>
           {Array.from({ length: totalPages }).map((_, i) => (
-            <button key={i} onClick={() => setPage(i)} style={{ width: i === page ? 24 : 8, height: 8, borderRadius: 4, border: "none", background: i === page ? "#8B1A2F" : "#d1a0a8", cursor: "pointer", transition: "all 0.3s ease", padding: 0 }} />
+            <button
+              key={i}
+              onClick={() => setPage(i)}
+              style={{ width: i === page ? 24 : 8, height: 8, borderRadius: 4, border: "none", background: i === page ? "#8B1A2F" : "#d1a0a8", cursor: "pointer", transition: "all 0.3s ease", padding: 0 }}
+            />
           ))}
         </div>
       )}
@@ -396,7 +401,6 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
     </div>
   );
 
-  // Desktop: first 4 reviews in 2×2, then "View All" to expand
   const desktopVisible = showAll ? reviews : reviews.slice(0, 4);
   const hasMore = reviews.length > 4;
 
@@ -410,7 +414,6 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
       </Reveal>
 
       {isMobile ? (
-        /* Mobile: single auto-advance card */
         <div style={{ maxWidth: 500, margin: "0 auto", padding: "0 4px" }}>
           <div style={{ overflow: "hidden", borderRadius: 20 }}>
             {reviews.length > 0 && <ReviewCard customer={reviews[reviewPage]} />}
@@ -424,7 +427,6 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
           )}
         </div>
       ) : (
-        /* Desktop: 2×2 grid showing 4, expand on demand */
         <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
             {desktopVisible.map((customer: any, i: number) => (
@@ -433,7 +435,6 @@ const ReviewsSection = ({ reviews }: { reviews: any[] }) => {
               </Reveal>
             ))}
           </div>
-          {/* View All / Show Less */}
           {hasMore && (
             <div style={{ display: "flex", justifyContent: "center", marginTop: 32 }}>
               <button
@@ -530,7 +531,7 @@ const Home = () => {
           )}
         </section>
 
-        {/* Shop by Category — max-w-[1000px] */}
+        {/* Shop by Category */}
         <section className="py-20 px-8 bg-background">
           <Reveal>
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Shop by Category</h2>
@@ -555,7 +556,7 @@ const Home = () => {
           </div>
         </section>
 
-        {/* Best Sellers — 1000px, same as Shop by Category */}
+        {/* Best Sellers */}
         <section className="py-16 bg-background">
           <Reveal>
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Best Sellers</h2>
@@ -574,7 +575,7 @@ const Home = () => {
               renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
             />
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", maxWidth: "1000px", margin: "0 auto", padding: "0 48px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "24px", maxWidth: "1000px", margin: "0 auto", padding: "0 52px" }}>
               {[1, 2].map((i) => (
                 <div key={i} className="bg-solea-warm rounded-2xl overflow-hidden border border-border shadow-sm">
                   <div style={{ width: "100%", aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 25px, hsl(var(--solea-beige)) 25px, hsl(var(--solea-beige)) 50px)" }}>
@@ -616,7 +617,7 @@ const Home = () => {
           </Reveal>
         </section>
 
-        {/* On Sale — 1000px, same as Shop by Category */}
+        {/* On Sale */}
         {validSaleItems.length > 0 && (
           <section className="py-16 bg-background">
             <Reveal>
@@ -649,9 +650,8 @@ const Home = () => {
         {/* Happy Customers */}
         <ReviewsSection reviews={reviews} />
 
-        {/* About Us — full bleed stripes edge to edge, curved wave top */}
+        {/* About Us */}
         <section style={{ position: "relative", background: "repeating-linear-gradient(to right, hsl(var(--solea-pink) / 0.45), hsl(var(--solea-pink) / 0.45) 70px, hsl(var(--solea-beige) / 0.55) 70px, hsl(var(--solea-beige) / 0.55) 140px)", paddingBottom: "72px", paddingTop: "48px" }}>
-
           <Reveal direction="up">
             <div className="about-us-content-wrap" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 48px" }}>
               <div className="about-us-grid">
