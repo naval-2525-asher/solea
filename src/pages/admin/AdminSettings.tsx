@@ -10,32 +10,24 @@ export default function AdminSettings() {
   const [whatsappNumber, setWhatsappNumber] = useState("03248922980");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load existing value from settings
   useEffect(() => {
-    const setting = (siteSettings as any[]).find((s: any) => s.key === "whatsapp_number");
-    if (setting?.value) {
-      setWhatsappNumber(setting.value);
-    }
+    const wa = (siteSettings as any[]).find((s: any) => s.key === "whatsapp_number");
+    if (wa?.value) setWhatsappNumber(wa.value);
   }, [siteSettings]);
 
   const handleSave = async () => {
     const trimmed = whatsappNumber.trim();
-    if (!trimmed) {
-      toast.error("Please enter a valid WhatsApp number.");
-      return;
-    }
-    // Basic validation: must have digits, allow + prefix
+    if (!trimmed) { toast.error("Please enter a valid WhatsApp number."); return; }
     if (!/^\+?[\d\s\-()]{7,20}$/.test(trimmed)) {
-      toast.error("Please enter a valid phone number (e.g. 03248922980 or +447700900123).");
+      toast.error("Please enter a valid phone number.");
       return;
     }
-
     setIsSaving(true);
     try {
       await updateSetting.mutateAsync({ key: "whatsapp_number", value: trimmed });
-      toast.success("WhatsApp number updated successfully ✓");
+      toast.success("WhatsApp number updated ✓");
     } catch (err: any) {
-      toast.error(err.message || "Failed to save setting.");
+      toast.error(err.message || "Failed to save.");
     } finally {
       setIsSaving(false);
     }

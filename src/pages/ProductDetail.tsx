@@ -66,6 +66,8 @@ const ProductDetail = () => {
 
   // Sale data — must be before any early returns (React rules of hooks)
   const { data: saleData = [] } = useSaleProducts();
+  const [quantity, setQuantity] = useState(1);
+  const [quantityError, setQuantityError] = useState("");
   const { region, formatPrice } = useRegion();
 
   if (isLoading) {
@@ -90,6 +92,12 @@ const ProductDetail = () => {
       </main>
     );
   }
+
+  // Stock from inventory — placed after early returns so product is defined
+  const rawStock = (dbProduct as any)?.stock_count;
+  const stockCount: number = (rawStock !== null && rawStock !== undefined) ? Number(rawStock) : Infinity;
+  const isLowStock = stockCount > 0 && stockCount <= 5;
+  const isOOS = stockCount === 0 || (product as any).stock_status === "out_of_stock" || (product as any).stock_status === "Out of Stock";
 
   const allImages: string[] = (() => {
     if (dbProduct) {
@@ -125,10 +133,6 @@ const ProductDetail = () => {
     if (!variantGroups[v.label]) variantGroups[v.label] = [];
     variantGroups[v.label].push(v);
   });
-
-  // Stock
-  const isLowStock = (product as any).stock_status === "low_stock";
-  const isOOS = (product as any).stock_status === "out_of_stock" || (product as any).stock_status === "Out of Stock";
 
   const extraPrice = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff || 0), 0);
   const displayPrice = (product.price || 0) + extraPrice;
@@ -179,6 +183,13 @@ const ProductDetail = () => {
     setErrorGroups([]);
     setCustomErrors([]);
 
+    // Stock quantity validation
+    if (stockCount !== Infinity && quantity > stockCount) {
+      setQuantityError(`Only ${stockCount} of this item available in stock.`);
+      return;
+    }
+    setQuantityError("");
+
     // Build customisation record for cart display
     const customisation: Record<string, string> = {};
     // Add variant selections
@@ -196,15 +207,17 @@ const ProductDetail = () => {
       ? (salePriceGbp ?? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice))
       : (salePrice ?? displayPrice);
 
-    addToCart({
-      productId: typeof product.id === "number" ? product.id : 9999,
-      name: product.name,
-      image: allImages[0] || (product as any).image || "",
-      price: regionPrice,
-      size: selectedSize || "One Size",
-      style: isTeeProduct ? selectedType : "tee",
-      customisation: Object.keys(customisation).length > 0 ? customisation : undefined,
-    });
+    for (let i = 0; i < quantity; i++) {
+      addToCart({
+        productId: typeof product.id === "number" ? product.id : 9999,
+        name: product.name,
+        image: allImages[0] || (product as any).image || "",
+        price: regionPrice,
+        size: selectedSize || "One Size",
+        style: isTeeProduct ? selectedType : "tee",
+        customisation: Object.keys(customisation).length > 0 ? customisation : undefined,
+      });
+    }
     toast.success(`${product.name} added to cart!`);
   };
 
@@ -476,6 +489,44 @@ const ProductDetail = () => {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Stock status */}
+          {isLowStock && !isOOS && (
+            <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#92400e", margin: 0 }}>
+                ⚠ Only {stockCount} left in stock — order soon!
+              </p>
+            </div>
+          )}
+
+          {/* Quantity selector */}
+          {!isOOS && (
+            <div className="mb-4">
+              <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Quantity</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button
+                  onClick={() => { const q = Math.max(1, quantity - 1); setQuantity(q); setQuantityError(""); }}
+                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >−</button>
+                <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: "hsl(var(--foreground))", minWidth: 24, textAlign: "center" }}>{quantity}</span>
+                <button
+                  onClick={() => {
+                    const max = stockCount !== Infinity ? stockCount : 99;
+                    if (quantity >= max) {
+                      setQuantityError(`Only ${max} of this item available in stock.`);
+                      return;
+                    }
+                    setQuantity(quantity + 1);
+                    setQuantityError("");
+                  }}
+                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >+</button>
+              </div>
+              {quantityError && (
+                <p style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", color: "#dc2626", marginTop: 6 }}>{quantityError}</p>
+              )}
             </div>
           )}
 

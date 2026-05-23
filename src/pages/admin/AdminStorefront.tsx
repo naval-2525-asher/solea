@@ -41,8 +41,10 @@ export default function AdminStorefront() {
   const deleteSale = useDeleteSaleProduct();
   const updateSetting = useUpdateSiteSetting();
 
-  const announcementText = settings.find((s: any) => s.key === "announcement_text")?.value || "";
-  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const announcementPKText = settings.find((s: any) => s.key === "announcement_text_pk")?.value || "";
+  const announcementUKText = settings.find((s: any) => s.key === "announcement_text_uk")?.value || "";
+  const [announcementPK, setAnnouncementPK] = useState<string | null>(null);
+  const [announcementUK, setAnnouncementUK] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string } | null>(null);
 
   // Best seller dialog
@@ -69,11 +71,19 @@ export default function AdminStorefront() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleSaveAnnouncement = async () => {
+  const handleSaveAnnouncementPK = async () => {
     try {
-      await updateSetting.mutateAsync({ key: "announcement_text", value: announcement || "" });
-      setAnnouncement(null);
-      toast.success("Announcement updated");
+      await updateSetting.mutateAsync({ key: "announcement_text_pk", value: announcementPK || "" });
+      setAnnouncementPK(null);
+      toast.success("Pakistan announcement updated");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleSaveAnnouncementUK = async () => {
+    try {
+      await updateSetting.mutateAsync({ key: "announcement_text_uk", value: announcementUK || "" });
+      setAnnouncementUK(null);
+      toast.success("UK announcement updated");
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -130,18 +140,31 @@ export default function AdminStorefront() {
     <div className="space-y-10">
       <h1 className="font-serif text-2xl font-black text-foreground">Storefront Manager</h1>
 
-      {/* Announcement Bar */}
+      {/* Announcement Bars */}
       <section className="space-y-3">
-        <h2 className="font-serif text-lg font-bold text-foreground">Announcement Bar</h2>
-        <p className="font-serif text-xs text-muted-foreground">This text scrolls at the top of every page.</p>
-        <div className="flex gap-2">
-          <Input
-            value={announcement !== null ? announcement : announcementText}
-            onChange={(e) => setAnnouncement(e.target.value)}
-            className="font-serif text-sm flex-1"
-            placeholder="Enter announcement text..."
-          />
-          <Button onClick={handleSaveAnnouncement} disabled={announcement === null || updateSetting.isPending} className="font-serif">Save</Button>
+        <h2 className="font-serif text-lg font-bold text-foreground">Announcement Bars</h2>
+        <p className="font-serif text-xs text-muted-foreground">Scrolling text shown at the top — each region sees their own.</p>
+        <div className="space-y-3">
+          <div className="flex gap-2 items-center">
+            <span className="font-serif text-sm font-bold text-foreground whitespace-nowrap">🇵🇰 Pakistan</span>
+            <Input
+              value={announcementPK !== null ? announcementPK : announcementPKText}
+              onChange={(e) => setAnnouncementPK(e.target.value)}
+              className="font-serif text-sm flex-1"
+              placeholder="Pakistan announcement text..."
+            />
+            <Button onClick={handleSaveAnnouncementPK} disabled={announcementPK === null || updateSetting.isPending} className="font-serif">Save</Button>
+          </div>
+          <div className="flex gap-2 items-center">
+            <span className="font-serif text-sm font-bold text-foreground whitespace-nowrap">🇬🇧 UK</span>
+            <Input
+              value={announcementUK !== null ? announcementUK : announcementUKText}
+              onChange={(e) => setAnnouncementUK(e.target.value)}
+              className="font-serif text-sm flex-1"
+              placeholder="UK announcement text..."
+            />
+            <Button onClick={handleSaveAnnouncementUK} disabled={announcementUK === null || updateSetting.isPending} className="font-serif">Save</Button>
+          </div>
         </div>
       </section>
 
@@ -363,7 +386,7 @@ export default function AdminStorefront() {
               <SelectContent>
                 {products.map((p: any) => (
                   <SelectItem key={p.id} value={p.id} className="font-serif">
-                    {p.name} — PKR {p.price.toLocaleString()}{p.price_gbp ? ` / £${Number(p.price_gbp).toLocaleString("en-GB")}` : ""}
+                    {p.name} — PKR {p.price.toLocaleString()}{(p as any).price_gbp ? ` / £${Number((p as any).price_gbp).toLocaleString("en-GB")}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -374,7 +397,7 @@ export default function AdminStorefront() {
               return prod ? (
                 <p className="font-serif text-[11px] text-muted-foreground bg-secondary/40 rounded px-2 py-1.5">
                   Original: <strong>PKR {prod.price?.toLocaleString()}</strong>
-                  {prod.price_gbp ? <> &nbsp;/&nbsp; <strong>£{Number(prod.price_gbp).toLocaleString("en-GB")}</strong></> : " (no GBP price set)"}
+                  {(prod as any).price_gbp ? <> &nbsp;/&nbsp; <strong>£{Number((prod as any).price_gbp).toLocaleString("en-GB")}</strong></> : " (no GBP price set)"}
                 </p>
               ) : null;
             })()}
@@ -406,7 +429,7 @@ export default function AdminStorefront() {
               const prod = products.find((p: any) => p.id === saleProduct);
               if (!prod) return null;
               const pkrDiscount = salePrice && prod.price ? Math.round(((prod.price - Number(salePrice)) / prod.price) * 100) : null;
-              const gbpDiscount = salePriceGbp && prod.price_gbp ? Math.round(((prod.price_gbp - Number(salePriceGbp)) / prod.price_gbp) * 100) : null;
+              const gbpDiscount = salePriceGbp && (prod as any).price_gbp ? Math.round((((prod as any).price_gbp - Number(salePriceGbp)) / (prod as any).price_gbp) * 100) : null;
               return (
                 <p className="font-serif text-xs text-muted-foreground">
                   {pkrDiscount !== null && <span className="text-red-500 font-bold">PKR save {pkrDiscount}%</span>}

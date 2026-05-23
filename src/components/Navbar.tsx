@@ -10,9 +10,11 @@ import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 // ── Announcement Bar ──────────────────────────────────────────────────────────
 const AnnouncementBar = () => {
   const { data: settings = [] } = useSiteSettings();
-  const text =
-    settings.find((s: any) => s.key === "announcement_text")?.value ||
-    "Shipping may take up to 4 weeks, for more information check out FAQ";
+  const { region } = useRegion();
+  const isUK = region === "UK";
+  const text = isUK
+    ? settings.find((s: any) => s.key === "announcement_text_uk")?.value || "Free delivery on orders over £80 ✦ Shipping may take up to 4 weeks"
+    : settings.find((s: any) => s.key === "announcement_text_pk")?.value || "Shipping may take up to 4 weeks ✦ Free delivery on orders over PKR 10,000";
   const chunk = `${text}\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0✦\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0`;
   const repeated = Array(15).fill(chunk).join("");
   return (

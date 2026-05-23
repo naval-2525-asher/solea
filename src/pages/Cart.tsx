@@ -4,9 +4,18 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
+import { useProducts } from "@/hooks/useAdminData";
+import { toast } from "sonner";
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice } = useCart();
+  const { data: products = [] } = useProducts();
+
+  const getStock = (productId: number | string) => {
+    const p = (products as any[]).find((p: any) => p.id === productId || p.id === String(productId));
+    const rawStock = (p as any)?.stock_count;
+    return (rawStock !== null && rawStock !== undefined) ? Number(rawStock) : Infinity;
+  };
   const { formatPrice, regionConfig } = useRegion();
 
   // Cart items store price in the active region's currency at time of add
@@ -92,7 +101,15 @@ const Cart = () => {
                       <Minus size={14} />
                     </button>
                     <span className="font-serif text-sm font-bold text-foreground w-5 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.productId, item.size, item.style, item.quantity + 1, key)}
+                    <button
+                      onClick={() => {
+                        const stock = getStock(item.productId);
+                        if (item.quantity >= stock) {
+                          toast.error(`Only ${stock} of this item available in stock.`);
+                          return;
+                        }
+                        updateQuantity(item.productId, item.size, item.style, item.quantity + 1, key);
+                      }}
                       className="w-7 h-7 rounded-full border border-border bg-transparent text-foreground flex items-center justify-center cursor-pointer hover:bg-secondary transition-colors">
                       <Plus size={14} />
                     </button>
