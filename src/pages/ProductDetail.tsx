@@ -30,7 +30,14 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   </div>
 );
 
-const LOW_STOCK_THRESHOLD = 5;
+// ── Low stock messaging ────────────────────────────────────────────────────────
+function getLowStockMessage(count: number): string {
+  if (count === 1) return "Only 1 left — grab it before it's gone! 🔥";
+  if (count === 2) return "Only 2 left — hurry, they're going fast! ⚡";
+  if (count === 3) return "Just 3 remaining — don't miss out! 🛍";
+  if (count <= 5) return `Only ${count} left in stock — order soon!`;
+  return `Low stock — only ${count} remaining`;
+}
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -59,12 +66,10 @@ const ProductDetail = () => {
   const [careOpen, setCareOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  // validation
   const [shakeGroups, setShakeGroups] = useState<string[]>([]);
   const [errorGroups, setErrorGroups] = useState<string[]>([]);
   const [customErrors, setCustomErrors] = useState<string[]>([]);
 
-  // Sale data — must be before any early returns (React rules of hooks)
   const { data: saleData = [] } = useSaleProducts();
   const [quantity, setQuantity] = useState(1);
   const [quantityError, setQuantityError] = useState("");
@@ -93,11 +98,32 @@ const ProductDetail = () => {
     );
   }
 
-  // Stock from inventory — placed after early returns so product is defined
+  // ── Stock from inventory ──────────────────────────────────────────────────
   const rawStock = (dbProduct as any)?.stock_count;
   const stockCount: number = (rawStock !== null && rawStock !== undefined) ? Number(rawStock) : Infinity;
-  const isLowStock = stockCount > 0 && stockCount <= 5;
+  const sizeStock: Record<string, number> = (dbProduct as any)?.size_stock ?? {};
+  const colorStock: Record<string, number> = (dbProduct as any)?.color_stock ?? {};
+
+  // Per-size stock lookup: returns remaining qty for a given size (Infinity if not tracked)
+  const getSizeStock = (size: string): number => {
+    if (sizeStock && Object.keys(sizeStock).length > 0) {
+      return sizeStock[size] !== undefined ? Number(sizeStock[size]) : 0;
+    }
+    return stockCount; // fall back to total if no per-size data
+  };
+
+  const isSizeOOS = (size: string): boolean => getSizeStock(size) === 0;
+
+  const isLowStock = stockCount !== Infinity && stockCount > 0 && stockCount <= 5;
   const isOOS = stockCount === 0 || (product as any).stock_status === "out_of_stock" || (product as any).stock_status === "Out of Stock";
+
+  // Per-size low stock: used to show inline hints next to size buttons
+  const getSizeLowStockMsg = (size: string): string | null => {
+    const qty = getSizeStock(size);
+    if (qty === 0) return null; // handled as OOS
+    if (qty <= 3) return `${qty} left`;
+    return null;
+  };
 
   const allImages: string[] = (() => {
     if (dbProduct) {
@@ -156,14 +182,27 @@ const ProductDetail = () => {
     setTimeout(() => setShakeGroups([]), 600);
   };
 
+  // Max purchasable qty: min of total stock and selected-size stock
+  const maxQty = (): number => {
+    if (stockCount === Infinity) return 99;
+    if (selectedSize && Object.keys(sizeStock).length > 0) {
+      return Math.min(stockCount, getSizeStock(selectedSize));
+    }
+    return stockCount;
+  };
+
   const handleAddToCart = () => {
-    // 1. Size validation
     if (hasSizes && !selectedSize) {
       toast.error("Please select a size");
       return;
     }
 
-    // 2. Variant group validation
+    // Per-size OOS check
+    if (selectedSize && isSizeOOS(selectedSize)) {
+      toast.error(`Size ${selectedSize} is out of stock`);
+      return;
+    }
+
     const missingVariants = Object.keys(variantGroups).filter((g) => !selectedVariants[g]);
     if (missingVariants.length > 0) {
       setErrorGroups(missingVariants);
@@ -171,7 +210,6 @@ const ProductDetail = () => {
       return;
     }
 
-    // 3. Required custom input validation
     const missingInputs = customInputs.filter((ci) => ci.required && !customValues[ci.id]?.trim()).map((ci) => ci.id);
     if (missingInputs.length > 0) {
       setCustomErrors(missingInputs);
@@ -183,25 +221,21 @@ const ProductDetail = () => {
     setErrorGroups([]);
     setCustomErrors([]);
 
-    // Stock quantity validation
-    if (stockCount !== Infinity && quantity > stockCount) {
-      setQuantityError(`Only ${stockCount} of this item available in stock.`);
+    // Quantity vs stock check
+    const max = maxQty();
+    if (quantity > max) {
+      setQuantityError(
+        selectedSize && Object.keys(sizeStock).length > 0
+          ? `Only ${max} available in size ${selectedSize}.`
+          : `Only ${max} of this item available in stock.`
+      );
       return;
     }
     setQuantityError("");
 
-    // Build customisation record for cart display
     const customisation: Record<string, string> = {};
-    // Add variant selections
-    Object.entries(selectedVariants).forEach(([label, opt]) => {
-      customisation[label] = opt.name;
-    });
-    // Add custom input values
-    customInputs.forEach((ci) => {
-      if (customValues[ci.id]) {
-        customisation[ci.label] = customValues[ci.id];
-      }
-    });
+    Object.entries(selectedVariants).forEach(([label, opt]) => { customisation[label] = opt.name; });
+    customInputs.forEach((ci) => { if (customValues[ci.id]) customisation[ci.label] = customValues[ci.id]; });
 
     const regionPrice = region === "UK"
       ? (salePriceGbp ?? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice))
@@ -275,7 +309,6 @@ const ProductDetail = () => {
               <div className="w-full h-full flex items-center justify-center text-4xl">🪡</div>
             )}
 
-            {/* Low stock badge */}
             {isLowStock && !isOOS && (
               <div style={{
                 position: "absolute", top: 10, right: 10, zIndex: 10,
@@ -285,7 +318,7 @@ const ProductDetail = () => {
                 padding: "3px 10px", borderRadius: "999px",
                 boxShadow: "0 1px 6px rgba(0,0,0,0.10)",
               }}>
-                Few items left
+                {stockCount <= 3 ? `Only ${stockCount} left!` : "Low Stock"}
               </div>
             )}
 
@@ -347,8 +380,6 @@ const ProductDetail = () => {
           ) : (
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
               {formatPrice(displayPrice, ((dbProduct as any)?.price_gbp ?? 0) + extraPrice)}
-              {extraPrice > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPrice.toLocaleString()} for selected option)</span>}
-              {extraPrice > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPrice.toLocaleString("en-GB")} for selected option)</span>}
             </p>
           )}
 
@@ -368,19 +399,49 @@ const ProductDetail = () => {
             </>
           )}
 
-          {/* Size */}
+          {/* Size selector with per-size stock indicators */}
           {currentSizes.length > 0 && (
             <>
               <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Size</p>
-              <div className="flex gap-2 mb-8">
-                {currentSizes.map((size: string) => (
-                  <button key={size} onClick={() => setSelectedSize(size)}
-                    className="w-12 h-12 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
-                    style={{ borderColor: selectedSize === size ? "hsl(var(--primary))" : "hsl(var(--border))", backgroundColor: selectedSize === size ? "hsl(var(--primary))" : "transparent", color: selectedSize === size ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
-                    {size}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {currentSizes.map((size: string) => {
+                  const sizeOOS = isSizeOOS(size);
+                  const lowMsg = getSizeLowStockMsg(size);
+                  const isSelected = selectedSize === size;
+                  return (
+                    <div key={size} className="flex flex-col items-center gap-0.5">
+                      <button
+                        onClick={() => {
+                          if (sizeOOS) return;
+                          setSelectedSize(size);
+                          setQuantityError("");
+                          // Reset quantity if it exceeds new size stock
+                          const newMax = getSizeStock(size);
+                          if (quantity > newMax && newMax !== Infinity) setQuantity(Math.min(quantity, newMax));
+                        }}
+                        disabled={sizeOOS}
+                        className="w-12 h-12 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
+                        style={{
+                          borderColor: isSelected ? "hsl(var(--primary))" : sizeOOS ? "hsl(var(--border))" : "hsl(var(--border))",
+                          backgroundColor: isSelected ? "hsl(var(--primary))" : sizeOOS ? "hsl(var(--muted))" : "transparent",
+                          color: isSelected ? "hsl(var(--primary-foreground))" : sizeOOS ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))",
+                          cursor: sizeOOS ? "not-allowed" : "pointer",
+                          opacity: sizeOOS ? 0.45 : 1,
+                          position: "relative",
+                          textDecoration: sizeOOS ? "line-through" : "none",
+                        }}>
+                        {size}
+                      </button>
+                      {sizeOOS ? (
+                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "hsl(var(--muted-foreground))", fontWeight: 600 }}>sold out</span>
+                      ) : lowMsg ? (
+                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "#d97706", fontWeight: 700 }}>{lowMsg}</span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
+              <div className="mb-8" />
             </>
           )}
 
@@ -411,11 +472,21 @@ const ProductDetail = () => {
                 >
                   {options.map((opt) => {
                     const isSelected = selected?.name === opt.name;
+                    const optColorStock = colorStock[opt.name];
+                    const colorOOS = optColorStock !== undefined && optColorStock === 0;
                     if (isColorGroup) {
                       return (
-                        <button key={opt.name} title={opt.name}
-                          onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
-                          style={{ width: 32, height: 32, borderRadius: "50%", background: opt.name, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
+                        <div key={opt.name} className="flex flex-col items-center gap-1">
+                          <button title={opt.name}
+                            onClick={() => {
+                              if (colorOOS) return;
+                              setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt }));
+                              setErrorGroups((e) => e.filter((x) => x !== groupLabel));
+                            }}
+                            disabled={colorOOS}
+                            style={{ width: 32, height: 32, borderRadius: "50%", background: opt.name, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: colorOOS ? "not-allowed" : "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s", opacity: colorOOS ? 0.35 : 1 }} />
+                          {colorOOS && <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", color: "hsl(var(--muted-foreground))" }}>out</span>}
+                        </div>
                       );
                     }
                     return (
@@ -446,7 +517,6 @@ const ProductDetail = () => {
                     <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
                       {ci.label}{ci.required && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
                     </p>
-
                     {ci.type === "text" && (
                       <input type="text" value={customValues[ci.id] || ""}
                         onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
@@ -492,11 +562,20 @@ const ProductDetail = () => {
             </div>
           )}
 
-          {/* Stock status */}
+          {/* Stock warning banner */}
           {isLowStock && !isOOS && (
             <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
               <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#92400e", margin: 0 }}>
-                ⚠ Only {stockCount} left in stock — order soon!
+                ⚡ {getLowStockMessage(stockCount)}
+              </p>
+            </div>
+          )}
+
+          {/* Selected-size specific low stock warning */}
+          {selectedSize && !isSizeOOS(selectedSize) && getSizeStock(selectedSize) <= 3 && getSizeStock(selectedSize) > 0 && Object.keys(sizeStock).length > 0 && (
+            <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#c2410c", margin: 0 }}>
+                🔥 Only {getSizeStock(selectedSize)} left in size {selectedSize} — order soon!
               </p>
             </div>
           )}
@@ -513,9 +592,13 @@ const ProductDetail = () => {
                 <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: "hsl(var(--foreground))", minWidth: 24, textAlign: "center" }}>{quantity}</span>
                 <button
                   onClick={() => {
-                    const max = stockCount !== Infinity ? stockCount : 99;
+                    const max = maxQty();
                     if (quantity >= max) {
-                      setQuantityError(`Only ${max} of this item available in stock.`);
+                      setQuantityError(
+                        selectedSize && Object.keys(sizeStock).length > 0
+                          ? `Only ${max} available in size ${selectedSize}.`
+                          : `Only ${max} of this item available in stock.`
+                      );
                       return;
                     }
                     setQuantity(quantity + 1);
@@ -525,7 +608,7 @@ const ProductDetail = () => {
                 >+</button>
               </div>
               {quantityError && (
-                <p style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", color: "#dc2626", marginTop: 6 }}>{quantityError}</p>
+                <p style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", color: "#dc2626", marginTop: 6, fontWeight: 700 }}>⚠ {quantityError}</p>
               )}
             </div>
           )}

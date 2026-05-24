@@ -107,6 +107,7 @@ const App = () => (
                 <Route path="spotted" element={<AdminSpotted />} />
                 <Route path="storefront" element={<AdminStorefront />} />
                 <Route path="inventory" element={<AdminInventory />} />
+                <Route path="customisation" element={<AdminCustomisation />} />
                 <Route path="settings" element={<AdminSettings />} />
               </Route>
               <Route path="*" element={<NotFound />} />
