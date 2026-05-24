@@ -99,7 +99,7 @@ Soléa`,
 
   const subject = encodeURIComponent(subjects[status] || `Soléa – Order #${ref} Update`);
   const body = encodeURIComponent(bodies[status] || bodies["confirmed"]);
-  return `mailto:${email}?subject=${subject}&body=${body}`;
+  return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
 }
 
 export default function AdminOrders() {
@@ -114,10 +114,10 @@ export default function AdminOrders() {
     try {
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated to ${status}.`);
-      // Auto-open mailto for customer-facing status changes
+      // Auto-open Gmail compose for customer-facing status changes
       if (order && ["confirmed", "in-production", "shipped", "delivered", "cancelled"].includes(status)) {
-        const mailtoUrl = buildMailtoLink(order, status);
-        setTimeout(() => window.open(mailtoUrl, "_blank"), 400);
+        const gmailUrl = buildMailtoLink(order, status);
+        setTimeout(() => window.open(gmailUrl, "_blank"), 400);
       }
     } catch (e: any) {
       toast.error(e.message);

@@ -37,7 +37,7 @@ const buildMailtoLink = (email: string, name: string, orderId: string, status: s
   };
   const subject = encodeURIComponent(subjects[status] || `Soléa – Order #${ref} Update`);
   const body = encodeURIComponent(bodies[status] || bodies["confirmed"]);
-  return `mailto:${email}?subject=${subject}&body=${body}`;
+  return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
 };
 
 const OrderModal = ({ order, onClose }: { order: any; onClose: () => void }) => (
