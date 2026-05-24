@@ -73,6 +73,7 @@ const Checkout = () => {
   });
   const [emailError, setEmailError] = useState("");
   const [cityMode, setCityMode] = useState<"select" | "other">("select");
+  const [ukAcknowledged, setUkAcknowledged] = useState(false);
 
   const city = form.city === "Other" ? form.cityOther : form.city;
   const delivery = getDelivery(region, city, totalPrice);
@@ -174,6 +175,31 @@ const Checkout = () => {
             ⚠ Since each embroidery is meticulously hand beaded to order, please allow up to two weeks for production before shipping.
           </p>
         </div>
+
+        {/* UK Shipping Warning */}
+        {isUK && (
+          <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 mb-8">
+            <div className="flex items-start gap-3">
+              <span className="text-amber-500 text-xl leading-none mt-0.5">⚠</span>
+              <div className="space-y-3 flex-1">
+                <p className="font-serif text-sm font-bold text-amber-900 leading-relaxed">
+                  UK orders may experience extended shipping times and can take 3–4 months to arrive due to international shipping and customs delays. We will keep you updated and notify you once your order is ready for delivery. By placing an order, you acknowledge and accept these delivery timeframes.
+                </p>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ukAcknowledged}
+                    onChange={(e) => setUkAcknowledged(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600 cursor-pointer flex-shrink-0"
+                  />
+                  <span className="font-serif text-sm font-bold text-amber-800">
+                    I understand and accept that my order may take 3–4 months to arrive.
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 1. SHIPPING DETAILS */}
         <div className="bg-card border border-border rounded-xl p-6 mb-8">
@@ -353,15 +379,15 @@ const Checkout = () => {
 
           <button
             type="submit"
-            disabled={!paymentDone}
+            disabled={!paymentDone || (isUK && !ukAcknowledged)}
             className="w-full border-none rounded-full py-4 font-serif font-extrabold text-sm tracking-[0.2em] uppercase transition-all"
             style={{
-              backgroundColor: paymentDone ? "hsl(var(--primary))" : "hsl(var(--border))",
-              color: paymentDone ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground)/0.3)",
-              cursor: paymentDone ? "pointer" : "not-allowed",
+              backgroundColor: (paymentDone && (!isUK || ukAcknowledged)) ? "hsl(var(--primary))" : "hsl(var(--border))",
+              color: (paymentDone && (!isUK || ukAcknowledged)) ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground)/0.3)",
+              cursor: (paymentDone && (!isUK || ukAcknowledged)) ? "pointer" : "not-allowed",
             }}
           >
-            {paymentDone ? "Complete Order" : "Upload Screenshot to Continue"}
+            {!paymentDone ? "Upload Screenshot to Continue" : (isUK && !ukAcknowledged) ? "Please Acknowledge Delivery Terms" : "Complete Order"}
           </button>
         </form>
       </div>

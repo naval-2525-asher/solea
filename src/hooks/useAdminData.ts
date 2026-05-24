@@ -379,7 +379,7 @@ export function useUpdateOrderStatus() {
         .eq("id", id);
       if (error) throw error;
 
-      // When order is confirmed, notify admin with the WhatsApp number to use
+      // Send admin notification email on confirmation
       if (status === "confirmed") {
         try {
           const { data: order } = await supabase
@@ -389,20 +389,10 @@ export function useUpdateOrderStatus() {
             .single();
 
           if (order) {
-            // Fetch the current WhatsApp number from site_settings
-            const { data: settings } = await supabase
-              .from("site_settings")
-              .select("*");
-            const waNumberSetting = (settings as any[])?.find(
-              (s: any) => s.key === "whatsapp_number"
-            );
-            const whatsappNumber = waNumberSetting?.value || "03248922980";
-
             await supabase.functions.invoke("send-order-emails", {
               body: {
                 type: "admin_order_confirmed",
                 order,
-                whatsappNumber,
               },
             });
           }

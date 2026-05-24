@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useOrders, useUpdateOrderStatus, useSiteSettings } from "@/hooks/useAdminData";
+import { useOrders, useUpdateOrderStatus } from "@/hooks/useAdminData";
 import { toast } from "sonner";
-import { MessageCircle, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 
 const statusColor: Record<string, string> = {
   pending:         "bg-yellow-100 text-yellow-800",
@@ -14,52 +14,114 @@ const statusColor: Record<string, string> = {
 
 const statuses = ["all", "pending", "confirmed", "in-production", "shipped", "delivered", "cancelled"] as const;
 
+// ── Email template builder ────────────────────────────────────────────────────
+function buildMailtoLink(order: any, status: string): string {
+  const ref = order.id.slice(0, 8).toUpperCase();
+  const name = order.first_name;
+  const email = order.email;
+
+  const subjects: Record<string, string> = {
+    pending:          `Soléa – Order #${ref} Received`,
+    confirmed:        `Soléa – Order #${ref} Confirmed ✓`,
+    "in-production":  `Soléa – Order #${ref} Is Now In Production`,
+    shipped:          `Soléa – Order #${ref} Has Been Dispatched 🚚`,
+    delivered:        `Soléa – Order #${ref} Delivered ✅`,
+    cancelled:        `Soléa – Order #${ref} Cancellation Notice`,
+  };
+
+  const bodies: Record<string, string> = {
+    pending: `Dear ${name},
+
+Thank you for your order with Soléa! 🌸
+
+We have received your order #${ref} and are currently reviewing your payment. You will receive all updates and confirmations via email.
+
+We'll be in touch shortly once your payment has been verified.
+
+Warm regards,
+Soléa`,
+
+    confirmed: `Dear ${name},
+
+Great news! 🌸 Your Soléa order #${ref} has been verified and confirmed.
+
+We will now begin preparing your order. Since each piece is meticulously hand-beaded to order, please allow up to two weeks for production before shipping.
+
+You will receive all updates and confirmations via email.
+
+Warm regards,
+Soléa`,
+
+    "in-production": `Dear ${name},
+
+Your Soléa order #${ref} is now in production! ⚙️
+
+Our artisans are carefully hand-beading your piece. We estimate it will be ready for dispatch within the next few days.
+
+You will receive all updates and confirmations via email.
+
+Warm regards,
+Soléa`,
+
+    shipped: `Dear ${name},
+
+Wonderful news — your Soléa order #${ref} is on its way! 🚚
+
+Your order has been dispatched and is now with the courier. Please allow the estimated delivery timeframe for your region.
+
+You will receive all updates and confirmations via email.
+
+Warm regards,
+Soléa`,
+
+    delivered: `Dear ${name},
+
+We hope your Soléa order #${ref} has arrived safely! ✅
+
+Thank you so much for shopping with us. We'd love to hear your feedback — feel free to reply to this email.
+
+You will receive all updates and confirmations via email.
+
+With love,
+Soléa`,
+
+    cancelled: `Dear ${name},
+
+We're sorry to inform you that your Soléa order #${ref} has been cancelled.
+
+If you have any questions or would like to place a new order, please don't hesitate to reach out to us at shopsoleakhi@gmail.com.
+
+You will receive all updates and confirmations via email.
+
+Warm regards,
+Soléa`,
+  };
+
+  const subject = encodeURIComponent(subjects[status] || `Soléa – Order #${ref} Update`);
+  const body = encodeURIComponent(bodies[status] || bodies["confirmed"]);
+  return `mailto:${email}?subject=${subject}&body=${body}`;
+}
+
 export default function AdminOrders() {
   const { data: orders = [], isLoading } = useOrders();
-  const { data: siteSettings = [] } = useSiteSettings();
   const updateStatus = useUpdateOrderStatus();
   const [filter, setFilter] = useState<string>("all");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
   const filtered = filter === "all" ? orders : orders.filter((o: any) => o.status === filter);
 
-  const waNumberSetting = (siteSettings as any[]).find((s: any) => s.key === "whatsapp_number");
-  const whatsappNumber = waNumberSetting?.value || "03248922980";
-
   const handleStatus = async (id: string, status: string, order?: any) => {
     try {
       await updateStatus.mutateAsync({ id, status });
-      if (status === "confirmed") {
-        toast.success(`✓ Order verified! WhatsApp reminder sent to admin (${whatsappNumber}).`);
-        // Open WhatsApp to notify customer
-        if (order) {
-          const waUrl = buildWhatsAppLink(order.phone, order.first_name, order.id, order.status);
-          setTimeout(() => window.open(waUrl, "_blank"), 500);
-        }
-      } else if (status === "cancelled") {
-        toast.success("Order cancelled.");
-      } else {
-        toast.success(`Status updated to ${status}.`);
+      toast.success(`Status updated to ${status}.`);
+      // Auto-open mailto for customer-facing status changes
+      if (order && ["confirmed", "in-production", "shipped", "delivered", "cancelled"].includes(status)) {
+        const mailtoUrl = buildMailtoLink(order, status);
+        setTimeout(() => window.open(mailtoUrl, "_blank"), 400);
       }
     } catch (e: any) {
       toast.error(e.message);
     }
-  };
-
-  const buildWhatsAppLink = (phone: string, name: string, orderId: string, status?: string) => {
-    let n = phone.replace(/\D/g, "");
-    if (n.startsWith("0") && !n.startsWith("00")) n = "92" + n.slice(1);
-    const ref = orderId.slice(0, 8).toUpperCase();
-    const msgs: Record<string, string> = {
-      pending:          `Hello ${name}! 🌸 We've received your Soléa order #${ref} and are reviewing your payment. We'll confirm shortly. Thank you! 💕`,
-      confirmed:        `Hello ${name}! 🌸 Your Soléa order #${ref} has been verified and confirmed. We'll keep you updated on production and shipping. Thank you! 💕`,
-      "in-production":  `Hello ${name}! ⚙️ Your Soléa order #${ref} is now in production. Estimated delivery in 4–6 days. Thank you for your patience! 🌸`,
-      shipped:          `Hello ${name}! 🚚 Great news — your Soléa order #${ref} is on its way! Expect delivery soon. 💕`,
-      delivered:        `Hello ${name}! ✅ We hope your Soléa order #${ref} arrived safely. Thank you so much for shopping with us! 🌸`,
-      cancelled:        `Hello ${name}, unfortunately your Soléa order #${ref} has been cancelled. Please contact us if you have any questions or to place a new order.`,
-    };
-    const msg = msgs[status || "confirmed"] || msgs["confirmed"];
-    return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
   };
 
   return (
@@ -149,22 +211,22 @@ export default function AdminOrders() {
                             {!isCancelled && order.status !== "delivered" && (
                               <button
                                 onClick={() => {
-                                  if (confirm("Cancel this order?")) handleStatus(order.id, "cancelled");
+                                  if (confirm("Cancel this order?")) handleStatus(order.id, "cancelled", order);
                                 }}
                                 style={{ fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, padding: "5px 12px", borderRadius: "2rem", border: "none", background: "#fee2e2", color: "#dc2626", cursor: "pointer", whiteSpace: "nowrap" }}
                               >
                                 ✕ Cancel
                               </button>
                             )}
-                            {/* WhatsApp button */}
+                            {/* Email button */}
                             <a
-                              href={buildWhatsAppLink(order.phone, order.first_name, order.id, order.status)}
+                              href={buildMailtoLink(order, order.status || "confirmed")}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, padding: "5px 12px", borderRadius: "2rem", background: "#dcfce7", color: "#16a34a", textDecoration: "none", whiteSpace: "nowrap" }}
+                              style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, padding: "5px 12px", borderRadius: "2rem", background: "#dbeafe", color: "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap" }}
                             >
-                              <MessageCircle size={12} />
-                              WA
+                              <Mail size={12} />
+                              Email
                             </a>
                           </div>
                         </td>
@@ -178,6 +240,9 @@ export default function AdminOrders() {
 
                               {/* Left: order info */}
                               <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground">
+                                  <strong>Email:</strong> {order.email}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
                                   <strong>Phone:</strong> {order.phone}
                                 </p>
@@ -246,19 +311,35 @@ export default function AdminOrders() {
                                   </div>
                                 </div>
 
-                                {/* WhatsApp prompt */}
-                                <div className="flex items-center gap-2 pt-1">
-                                  <a
-                                    href={buildWhatsAppLink(order.phone, order.first_name, order.id, order.status)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 font-serif text-xs px-4 py-2 rounded-full no-underline transition-colors"
-                                    style={{ background: "#25D366", color: "#fff" }}
-                                  >
-                                    <MessageCircle size={13} />
-                                    Send WhatsApp to Customer
-                                  </a>
-                                  <span className="font-serif text-[10px] text-muted-foreground">via {whatsappNumber}</span>
+                                {/* Email notification buttons */}
+                                <div className="space-y-2 pt-1">
+                                  <p className="text-xs font-bold text-foreground">Email Customer:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {["confirmed", "in-production", "shipped", "delivered", "cancelled"].map((s) => {
+                                      const labels: Record<string, string> = {
+                                        confirmed: "✓ Order Confirmed",
+                                        "in-production": "⚙ In Production",
+                                        shipped: "🚚 Dispatched",
+                                        delivered: "✅ Delivered",
+                                        cancelled: "✕ Cancelled",
+                                      };
+                                      return (
+                                        <a
+                                          key={s}
+                                          href={buildMailtoLink(order, s)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1.5 font-serif text-xs px-3 py-1.5 rounded-full border border-border bg-card text-foreground hover:bg-secondary transition-colors no-underline"
+                                        >
+                                          <Mail size={11} />
+                                          {labels[s]}
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="font-serif text-[10px] text-muted-foreground">
+                                    Opens your email client with a pre-filled template. You can edit before sending.
+                                  </p>
                                 </div>
                               </div>
                             </div>

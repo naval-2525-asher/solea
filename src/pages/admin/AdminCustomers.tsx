@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useOrders, useUpdateOrderStatus } from "@/hooks/useAdminData";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { ChevronDown, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 const SHIPPING_OPTIONS = [
@@ -21,17 +21,23 @@ const statusBadge = (status: string) => {
   return map[status] || { label: "● Pending", color: "#d97706", bg: "#fef3c7" };
 };
 
-const buildWhatsAppLink = (phone: string, name: string, status: string) => {
-  let n = phone.replace(/\D/g, "");
-  if (n.startsWith("0") && !n.startsWith("00")) n = "92" + n.slice(1);
-  const msgs: Record<string, string> = {
-    "in-production": `Hi ${name}! 🌸 Your Soléa order is now in production. We'll notify you once it ships. Thank you! 💕`,
-    shipped:         `Hi ${name}! 🚚 Great news — your Soléa order is on its way! Expect delivery soon. 💕`,
-    delivered:       `Hi ${name}! ✅ We hope your Soléa order arrived safely. Thank you for shopping with us! 🌸`,
-    cancelled:       `Hi ${name}, unfortunately your Soléa order has been cancelled. Please contact us if you have any questions.`,
+const buildMailtoLink = (email: string, name: string, orderId: string, status: string) => {
+  const ref = orderId.slice(0, 8).toUpperCase();
+  const subjects: Record<string, string> = {
+    confirmed: `Soléa – Order #${ref} Confirmed ✓`,
+    shipped:   `Soléa – Order #${ref} Has Been Dispatched 🚚`,
+    delivered: `Soléa – Order #${ref} Delivered ✅`,
+    cancelled: `Soléa – Order #${ref} Cancellation Notice`,
   };
-  const msg = msgs[status] || `Hi ${name}! An update on your Soléa order.`;
-  return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
+  const bodies: Record<string, string> = {
+    confirmed: `Dear ${name},\n\nYour Soléa order #${ref} has been confirmed. You will receive all updates and confirmations via email.\n\nWarm regards,\nSoléa`,
+    shipped:   `Dear ${name},\n\nYour Soléa order #${ref} has been dispatched and is on its way! You will receive all updates and confirmations via email.\n\nWarm regards,\nSoléa`,
+    delivered: `Dear ${name},\n\nWe hope your Soléa order #${ref} arrived safely! Thank you for shopping with us. You will receive all updates and confirmations via email.\n\nWith love,\nSoléa`,
+    cancelled: `Dear ${name},\n\nUnfortunately your Soléa order #${ref} has been cancelled. Please contact us at shopsoleakhi@gmail.com if you have any questions. You will receive all updates and confirmations via email.\n\nWarm regards,\nSoléa`,
+  };
+  const subject = encodeURIComponent(subjects[status] || `Soléa – Order #${ref} Update`);
+  const body = encodeURIComponent(bodies[status] || bodies["confirmed"]);
+  return `mailto:${email}?subject=${subject}&body=${body}`;
 };
 
 const OrderModal = ({ order, onClose }: { order: any; onClose: () => void }) => (
@@ -107,12 +113,6 @@ export default function AdminCustomers() {
       await updateStatus.mutateAsync({ id, status });
       toast.success("Status updated!");
       setOpenDropdown(null);
-
-      // Auto-open WhatsApp for shipping updates
-      if (customer && ["in-production", "shipped", "delivered", "cancelled"].includes(status)) {
-        const waUrl = buildWhatsAppLink(customer.phone, customer.first_name, status);
-        window.open(waUrl, "_blank");
-      }
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -209,18 +209,7 @@ export default function AdminCustomers() {
                                   {c.status === opt.value && <span style={{ fontSize: 10 }}>✓</span>}
                                 </button>
                               ))}
-                              {/* WhatsApp button */}
-                              <div style={{ borderTop: "1px solid hsl(var(--border))", marginTop: 6, paddingTop: 6 }}>
-                                <a
-                                  href={buildWhatsAppLink(c.phone, c.first_name, c.status)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, padding: "8px 10px", borderRadius: 8, background: "#dcfce7", color: "#16a34a", textDecoration: "none" }}
-                                >
-                                  <MessageCircle size={13} />
-                                  WhatsApp Customer
-                                </a>
-                              </div>
+                              
                             </div>
                           )}
                         </div>
