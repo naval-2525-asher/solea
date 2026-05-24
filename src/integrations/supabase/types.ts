@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
@@ -96,6 +94,93 @@ export type Database = {
           },
         ]
       }
+      orders: {
+        Row: {
+          id: string
+          created_at: string
+          first_name: string
+          last_name: string
+          email: string
+          phone: string
+          address: string
+          city: string
+          province: string | null
+          postcode: string | null
+          region: string
+          items: Json
+          total: number
+          delivery_charge: number | null
+          transaction_id: string | null
+          transaction_screenshot: string | null
+          status: string
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          first_name: string
+          last_name: string
+          email: string
+          phone: string
+          address: string
+          city: string
+          province?: string | null
+          postcode?: string | null
+          region: string
+          items: Json
+          total: number
+          delivery_charge?: number | null
+          transaction_id?: string | null
+          transaction_screenshot?: string | null
+          status?: string
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          first_name?: string
+          last_name?: string
+          email?: string
+          phone?: string
+          address?: string
+          city?: string
+          province?: string | null
+          postcode?: string | null
+          region?: string
+          items?: Json
+          total?: number
+          delivery_charge?: number | null
+          transaction_id?: string | null
+          transaction_screenshot?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      product_config: {
+        Row: {
+          id: string
+          section: string
+          product_type: string
+          config: Json
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id: string
+          section: string
+          product_type: string
+          config?: Json
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          section?: string
+          product_type?: string
+          config?: Json
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       sale_products: {
         Row: {
           created_at: string
@@ -103,6 +188,7 @@ export type Database = {
           id: string
           product_id: string
           sale_price: number
+          sale_price_gbp: number | null
         }
         Insert: {
           created_at?: string
@@ -110,6 +196,7 @@ export type Database = {
           id?: string
           product_id: string
           sale_price: number
+          sale_price_gbp?: number | null
         }
         Update: {
           created_at?: string
@@ -117,6 +204,7 @@ export type Database = {
           id?: string
           product_id?: string
           sale_price?: number
+          sale_price_gbp?: number | null
         }
         Relationships: [
           {
@@ -139,8 +227,11 @@ export type Database = {
           image: string
           images: string[] | null
           variants: Json | null
+          custom_inputs: Json | null
           name: string
           price: number
+          price_gbp: number | null
+          stock_count: number | null
           product_tags: string[]
           sizes: string[]
           stock_status: string
@@ -156,8 +247,11 @@ export type Database = {
           image?: string
           images?: string[] | null
           variants?: Json | null
+          custom_inputs?: Json | null
           name: string
           price?: number
+          price_gbp?: number | null
+          stock_count?: number | null
           product_tags?: string[]
           sizes?: string[]
           stock_status?: string
@@ -173,8 +267,11 @@ export type Database = {
           image?: string
           images?: string[] | null
           variants?: Json | null
+          custom_inputs?: Json | null
           name?: string
           price?: number
+          price_gbp?: number | null
+          stock_count?: number | null
           product_tags?: string[]
           sizes?: string[]
           stock_status?: string
@@ -271,7 +368,6 @@ export type Database = {
 }
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
@@ -370,26 +466,8 @@ export type Enums<
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
 
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
 export const Constants = {
   public: {
     Enums: {},
   },
 } as const
-

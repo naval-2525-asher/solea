@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 
 export interface CartItem {
-  productId: number;
+  productId: number | string;
   name: string;
   image: string;
   price: number;
@@ -16,8 +16,8 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addToCart: (item: Omit<CartItem, "quantity">) => void;
-  removeFromCart: (productId: number, size: string, style: string, cartKey?: string) => void;
-  updateQuantity: (productId: number, size: string, style: string, quantity: number, cartKey?: string) => void;
+  removeFromCart: (productId: number | string, size: string, style: string, cartKey?: string) => void;
+  updateQuantity: (productId: number | string, size: string, style: string, quantity: number, cartKey?: string) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -43,7 +43,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const removeFromCart = (productId: number, size: string, style: string, cartKey?: string) => {
+  const removeFromCart = (productId: number | string, size: string, style: string, cartKey?: string) => {
     setItems((prev) =>
       prev.filter((i) => {
         if (cartKey) return cartItemKey(i) !== cartKey;
@@ -52,14 +52,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const updateQuantity = (productId: number, size: string, style: string, quantity: number, cartKey?: string) => {
+  const updateQuantity = (productId: number | string, size: string, style: string, quantity: number, cartKey?: string) => {
     if (quantity <= 0) {
       removeFromCart(productId, size, style, cartKey);
       return;
     }
     setItems((prev) =>
       prev.map((i) => {
-        const match = cartKey ? cartItemKey(i) === cartKey : i.productId === productId && i.size === size && i.style === style;
+        const match = cartKey
+          ? cartItemKey(i) === cartKey
+          : i.productId === productId && i.size === size && i.style === style;
         return match ? { ...i, quantity } : i;
       })
     );

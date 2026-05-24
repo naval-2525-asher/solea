@@ -54,11 +54,13 @@ Soléa`,
 
     "in-production": `Dear ${name},
 
-Your Soléa order #${ref} is now in production! ⚙️
+Your Soléa order #${ref} is now in production ✨
 
-Our artisans are carefully hand-beading your piece. We estimate it will be ready for dispatch within the next few days.
+Your piece is currently being prepared and we estimate it will be ready for dispatch within the next few days.
 
-You will receive all updates and confirmations via email.
+We'll notify you again as soon as your order has been shipped.
+
+Thank you for your patience ♡
 
 Warm regards,
 Soléa`,
@@ -114,7 +116,6 @@ export default function AdminOrders() {
     try {
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated to ${status}.`);
-      // Auto-open Gmail compose for customer-facing status changes
       if (order && ["confirmed", "in-production", "shipped", "delivered", "cancelled"].includes(status)) {
         const gmailUrl = buildMailtoLink(order, status);
         setTimeout(() => window.open(gmailUrl, "_blank"), 400);
@@ -189,7 +190,9 @@ export default function AdminOrders() {
                           {new Date(order.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                         </td>
                         <td className="p-4 text-foreground font-bold">
-                          {order.region === "UK" ? `£${Number(order.total).toLocaleString("en-GB")}` : `PKR ${Number(order.total).toLocaleString()}`}
+                          {order.region === "UK"
+                            ? `£${Number(order.total).toLocaleString("en-GB")}`
+                            : `PKR ${Number(order.total).toLocaleString()}`}
                         </td>
                         <td className="p-4">
                           <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${statusColor[order.status] || "bg-yellow-100 text-yellow-800"}`}>
@@ -198,7 +201,6 @@ export default function AdminOrders() {
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            {/* Verify button — only for pending */}
                             {isPending && (
                               <button
                                 onClick={() => handleStatus(order.id, "confirmed", order)}
@@ -207,7 +209,6 @@ export default function AdminOrders() {
                                 ✓ Verify
                               </button>
                             )}
-                            {/* Cancel button — not for already cancelled/delivered */}
                             {!isCancelled && order.status !== "delivered" && (
                               <button
                                 onClick={() => {
@@ -218,7 +219,6 @@ export default function AdminOrders() {
                                 ✕ Cancel
                               </button>
                             )}
-                            {/* Email button */}
                             <a
                               href={buildMailtoLink(order, order.status || "confirmed")}
                               target="_blank"
@@ -252,13 +252,16 @@ export default function AdminOrders() {
                                   {order.postcode ? ` ${order.postcode}` : ""}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  <strong>Transaction ID:</strong> {order.transaction_id}
+                                  <strong>Transaction ID:</strong> {order.transaction_id || "—"}
                                 </p>
                                 <div className="pt-1">
                                   <p className="text-xs font-bold text-foreground mb-1">Items:</p>
                                   {(order.items || []).map((item: any, i: number) => (
                                     <p key={i} className="text-xs text-foreground/80 pl-2">
-                                      • {item.name} ({item.size}) × {item.quantity} —{" "}
+                                      • {item.name}
+                                      {item.color ? ` · ${item.color}` : ""}
+                                      {item.size ? ` · ${item.size}` : ""}
+                                      {" × "}{item.quantity} —{" "}
                                       {order.region === "UK"
                                         ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`
                                         : `PKR ${(item.price * item.quantity).toLocaleString()}`}

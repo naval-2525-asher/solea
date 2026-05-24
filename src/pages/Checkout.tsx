@@ -4,9 +4,9 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Paperclip, CheckCircle2, Lock, Truck } from "lucide-react";
+import { Paperclip, CheckCircle2, Lock, Truck, AlertTriangle } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
-import { useInsertOrder, uploadFile } from "@/hooks/useAdminData";
+import { useInsertOrder, uploadFile, useProducts } from "@/hooks/useAdminData";
 
 // ── City / Delivery Config ────────────────────────────────────────────────────
 const PK_CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta", "Hyderabad", "Sialkot", "Other"];
@@ -33,16 +33,13 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
 // ── Phone helpers ─────────────────────────────────────────────────────────────
 const formatPhone = (value: string, isUK: boolean) => {
-  // Strip everything except digits and +
   let digits = value.replace(/[^\d]/g, "");
   if (isUK) {
-    // UK: max 10 digits after country code (44)
     if (digits.startsWith("44")) digits = digits.slice(2);
     if (digits.startsWith("0")) digits = digits.slice(1);
     digits = digits.slice(0, 10);
     return digits ? `+44 ${digits}` : "";
   } else {
-    // PK: max 10 digits after country code (92)
     if (digits.startsWith("92")) digits = digits.slice(2);
     if (digits.startsWith("0")) digits = digits.slice(1);
     digits = digits.slice(0, 10);
@@ -56,9 +53,12 @@ const Checkout = () => {
   const { region } = useRegion();
   const isUK = region === "UK";
   const insertOrder = useInsertOrder();
+  const { data: allProducts = [] } = useProducts();
 
   const formatPrice = (price: number) =>
-    isUK ? `£${price.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `PKR ${price.toLocaleString()}`;
+    isUK
+      ? `£${price.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `PKR ${price.toLocaleString()}`;
 
   // Payment proof
   const [txnImage, setTxnImage] = useState<File | null>(null);
@@ -79,7 +79,6 @@ const Checkout = () => {
   const delivery = getDelivery(region, city, totalPrice);
   const grandTotal = totalPrice + delivery;
   const paymentDone = txnImage !== null;
-  const freeThreshold = isUK ? "£80" : "PKR 10,000";
   const deliveryMsg = delivery === 0
     ? "🎉 Free delivery!"
     : isUK
@@ -89,6 +88,42 @@ const Checkout = () => {
         : city
           ? "PKR 450 delivery · Free over PKR 10,000"
           : "Select city to see delivery charges";
+
+  // ── Stock validation ──────────────────────────────────────────────────────
+  // Build a map: productId → product row from DB
+  const productMap = new Map(
+    (allProducts as any[]).map((p: any) => [String(p.id), p])
+  );
+
+  // For each cart item check if requested qty exceeds stock_count
+  const stockErrors: { name: string; available: number; requested: number }[] = [];
+  for (const item of items) {
+    const product = productMap.get(String(item.productId));
+    if (!product) continue;
+    const stockCount: number =
+      product.stock_count !== null && product.stock_count !== undefined
+        ? Number(product.stock_count)
+        : Infinity;
+    if (stockCount !== Infinity && item.quantity > stockCount) {
+      stockErrors.push({
+        name: item.name,
+        available: stockCount,
+        requested: item.quantity,
+      });
+    }
+    // Also block entirely out-of-stock items
+    if (
+      stockCount === 0 ||
+      product.stock_status === "out_of_stock" ||
+      product.stock_status === "Out of Stock"
+    ) {
+      stockErrors.push({ name: item.name, available: 0, requested: item.quantity });
+    }
+  }
+
+  const hasStockErrors = stockErrors.length > 0;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,6 +155,13 @@ const Checkout = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Re-check stock one more time on submit
+    if (hasStockErrors) {
+      toast.error("Some items in your cart exceed available stock. Please update your cart.");
+      return;
+    }
+
     if (!paymentDone) { toast.error("Please upload your transaction screenshot"); return; }
     if (!form.firstName || !form.lastName || !form.email || !form.phone || !form.address || !city || (isUK ? !form.postcode : !form.province)) {
       toast.error("Please fill in all shipping details");
@@ -141,7 +183,15 @@ const Checkout = () => {
         province: form.province || null,
         postcode: form.postcode || null,
         region,
-        items,
+        items: items.map((item) => ({
+          name: item.name,
+          size: item.size,
+          color: item.customisation?.Colour ?? null,
+          quantity: item.quantity,
+          price: item.price,
+          style: item.style,
+          customisation: item.customisation ?? {},
+        })),
         total: grandTotal,
         transaction_id: txnId || null,
         transaction_screenshot: screenshotUrl,
@@ -161,7 +211,8 @@ const Checkout = () => {
 
   const inputBase = "w-full px-4 py-3 rounded-xl border font-serif text-sm outline-none transition-all";
   const inputEnabled = `${inputBase} border-border bg-card text-foreground placeholder:text-foreground/40 focus:ring-2 focus:ring-primary/30`;
-  const inputDisabled = `${inputBase} border-border/40 bg-muted text-foreground/30 cursor-not-allowed`;
+
+  const canSubmit = paymentDone && (!isUK || ukAcknowledged) && !hasStockErrors;
 
   return (
     <main className="bg-background min-h-screen">
@@ -175,6 +226,38 @@ const Checkout = () => {
             ⚠ Since each embroidery is meticulously hand beaded to order, please allow up to two weeks for production before shipping.
           </p>
         </div>
+
+        {/* Stock error banner */}
+        {hasStockErrors && (
+          <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 mb-8">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={20} className="text-amber-500 shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-serif text-sm font-bold text-amber-900">
+                  Some items in your cart exceed available stock:
+                </p>
+                {stockErrors.map((err, i) => (
+                  <p key={i} className="font-serif text-xs text-amber-800">
+                    <strong>{err.name}</strong> — you have {err.requested} in cart, but only{" "}
+                    {err.available === 0 ? (
+                      <strong>none available</strong>
+                    ) : (
+                      <>
+                        <strong>{err.available}</strong> available
+                      </>
+                    )}
+                  </p>
+                ))}
+                <a
+                  href="/cart"
+                  className="inline-block font-serif text-xs font-bold text-amber-900 underline mt-1"
+                >
+                  ← Update your cart
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* UK Shipping Warning */}
         {isUK && (
@@ -204,18 +287,15 @@ const Checkout = () => {
         {/* 1. SHIPPING DETAILS */}
         <div className="bg-card border border-border rounded-xl p-6 mb-8">
           <h2 className="text-foreground font-serif font-black text-lg mb-4">1. Shipping Details</h2>
-
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} className={inputEnabled} />
               <input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} className={inputEnabled} />
             </div>
-
             <div>
               <input name="email" type="email" placeholder="Email Address" value={form.email} onChange={handleChange} className={inputEnabled} />
               {emailError && <p className="font-serif text-xs text-destructive mt-1">{emailError}</p>}
             </div>
-
             <div>
               <input
                 name="phone"
@@ -227,10 +307,7 @@ const Checkout = () => {
                 className={inputEnabled}
               />
             </div>
-
             <input name="address" placeholder="Full Shipping Address" value={form.address} onChange={handleChange} className={inputEnabled} />
-
-            {/* City dropdown */}
             <div>
               <select name="city" value={form.city} onChange={handleChange} className={`${inputEnabled} appearance-none`}>
                 <option value="">Select City</option>
@@ -246,8 +323,6 @@ const Checkout = () => {
                 />
               )}
             </div>
-
-            {/* Province / Postcode */}
             {isUK ? (
               <input name="postcode" placeholder="Postcode (e.g. SW1A 1AA)" value={form.postcode} onChange={handleChange} className={inputEnabled} />
             ) : (
@@ -256,8 +331,6 @@ const Checkout = () => {
                 {PK_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
-
-            {/* Delivery info */}
             {(city || isUK) && (
               <div className="flex items-center gap-2 bg-secondary/40 rounded-xl px-4 py-3">
                 <Truck size={16} className="text-foreground/60 flex-shrink-0" />
@@ -300,12 +373,45 @@ const Checkout = () => {
         <div className="bg-card border border-border rounded-xl p-6 mb-8">
           <h2 className="text-foreground font-serif font-black text-lg mb-4">3. Order Summary</h2>
           <div className="space-y-3">
-            {items.map((item) => (
-              <div key={`${item.productId}-${item.size}-${item.style}`} className="flex justify-between items-start font-serif text-sm">
-                <span className="text-foreground">{item.name} · {item.size} × {item.quantity}</span>
-                <span className="text-foreground font-bold ml-4 flex-shrink-0">{formatPrice(item.price * item.quantity)}</span>
-              </div>
-            ))}
+            {items.map((item) => {
+              const product = productMap.get(String(item.productId));
+              const stockCount: number =
+                product?.stock_count !== null && product?.stock_count !== undefined
+                  ? Number(product.stock_count)
+                  : Infinity;
+              const isOOS =
+                stockCount === 0 ||
+                product?.stock_status === "out_of_stock" ||
+                product?.stock_status === "Out of Stock";
+              const exceedsStock = stockCount !== Infinity && item.quantity > stockCount;
+              const colour = item.customisation?.Colour;
+
+              return (
+                <div
+                  key={`${item.productId}-${item.size}-${item.style}-${JSON.stringify(item.customisation)}`}
+                  className="flex justify-between items-start font-serif text-sm"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className={`text-foreground ${exceedsStock || isOOS ? "text-destructive" : ""}`}>
+                      {item.name}
+                      {colour ? ` · ${colour}` : ""}
+                      {" · "}{item.size} × {item.quantity}
+                    </span>
+                    {isOOS && (
+                      <span className="text-destructive text-xs font-bold">This item is out of stock</span>
+                    )}
+                    {!isOOS && exceedsStock && (
+                      <span className="text-destructive text-xs font-bold">
+                        Only {stockCount} available — please reduce qty in cart
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-foreground font-bold ml-4 flex-shrink-0">
+                    {formatPrice(item.price * item.quantity)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <div className="border-t border-border my-3" />
           <div className="flex justify-between font-serif text-sm text-foreground/70 mb-1">
@@ -334,17 +440,13 @@ const Checkout = () => {
               <h2 className="text-foreground font-serif font-black text-lg">4. Transaction Screenshot</h2>
               {paymentDone && <CheckCircle2 size={20} className="text-green-500" />}
             </div>
-
-            {/* Warning */}
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
               <p className="font-serif text-xs text-amber-800 font-bold">
                 ⚠ Please review your updated cart total above (including delivery charges) before transferring the amount.
               </p>
             </div>
-
             <p className="text-foreground font-serif text-sm font-bold mb-2">Upload Screenshot</p>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-
             {txnImagePreview ? (
               <div className="relative mb-4">
                 <img src={txnImagePreview} alt="Transaction screenshot" className="w-full max-h-[220px] object-contain rounded-xl border border-border" />
@@ -365,7 +467,6 @@ const Checkout = () => {
                 <span className="font-serif text-xs text-foreground/40">JPG, PNG, HEIC supported</span>
               </button>
             )}
-
             <p className="text-foreground font-serif text-sm font-bold mb-2">Transaction ID (optional)</p>
             <input type="text" value={txnId} onChange={(e) => setTxnId(e.target.value)} placeholder="e.g. TXN-20250318-001234" className={inputEnabled} />
             <p className="text-foreground/40 font-serif text-xs mt-1.5">Found in your bank app under transaction details</p>
@@ -377,17 +478,31 @@ const Checkout = () => {
             </p>
           )}
 
+          {hasStockErrors && (
+            <p className="font-serif text-xs text-destructive text-center mb-3 font-bold">
+              ⚠ Please update your cart — some items exceed available stock.
+            </p>
+          )}
+
           <button
             type="submit"
-            disabled={!paymentDone || (isUK && !ukAcknowledged)}
+            disabled={!canSubmit || insertOrder.isPending}
             className="w-full border-none rounded-full py-4 font-serif font-extrabold text-sm tracking-[0.2em] uppercase transition-all"
             style={{
-              backgroundColor: (paymentDone && (!isUK || ukAcknowledged)) ? "hsl(var(--primary))" : "hsl(var(--border))",
-              color: (paymentDone && (!isUK || ukAcknowledged)) ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground)/0.3)",
-              cursor: (paymentDone && (!isUK || ukAcknowledged)) ? "pointer" : "not-allowed",
+              backgroundColor: canSubmit ? "hsl(var(--primary))" : "hsl(var(--border))",
+              color: canSubmit ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground)/0.3)",
+              cursor: canSubmit ? "pointer" : "not-allowed",
             }}
           >
-            {!paymentDone ? "Upload Screenshot to Continue" : (isUK && !ukAcknowledged) ? "Please Acknowledge Delivery Terms" : "Complete Order"}
+            {insertOrder.isPending
+              ? "Placing Order…"
+              : hasStockErrors
+                ? "Update Cart to Continue"
+                : !paymentDone
+                  ? "Upload Screenshot to Continue"
+                  : isUK && !ukAcknowledged
+                    ? "Please Acknowledge Delivery Terms"
+                    : "Complete Order"}
           </button>
         </form>
       </div>
