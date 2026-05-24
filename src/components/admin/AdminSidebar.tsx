@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingCart, Users, Package, LogOut, Star, Layout, Camera, Boxes, Settings, Palette } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, LogOut, Star, Layout, Camera, Boxes, Settings } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,7 +12,6 @@ const navItems = [
   { title: "Customers", url: "/admin/customers", icon: Users },
   { title: "Products", url: "/admin/products", icon: Package },
   { title: "Inventory", url: "/admin/inventory", icon: Boxes },
-  { title: "Customisation", url: "/admin/customisation", icon: Palette },
   { title: "Reviews", url: "/admin/reviews", icon: Star },
   { title: "Spotted", url: "/admin/spotted", icon: Camera },
   { title: "Storefront", url: "/admin/storefront", icon: Layout },

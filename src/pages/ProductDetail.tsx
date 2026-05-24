@@ -30,14 +30,7 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   </div>
 );
 
-// ── Low stock messaging ────────────────────────────────────────────────────────
-function getLowStockMessage(count: number): string {
-  if (count === 1) return "Only 1 left — grab it before it's gone! 🔥";
-  if (count === 2) return "Only 2 left — hurry, they're going fast! ⚡";
-  if (count === 3) return "Just 3 remaining — don't miss out! 🛍";
-  if (count <= 5) return `Only ${count} left in stock — order soon!`;
-  return `Low stock — only ${count} remaining`;
-}
+const LOW_STOCK_THRESHOLD = 5;
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -66,10 +59,12 @@ const ProductDetail = () => {
   const [careOpen, setCareOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  // validation
   const [shakeGroups, setShakeGroups] = useState<string[]>([]);
   const [errorGroups, setErrorGroups] = useState<string[]>([]);
   const [customErrors, setCustomErrors] = useState<string[]>([]);
 
+  // Sale data — must be before any early returns (React rules of hooks)
   const { data: saleData = [] } = useSaleProducts();
   const [quantity, setQuantity] = useState(1);
   const [quantityError, setQuantityError] = useState("");
@@ -98,31 +93,35 @@ const ProductDetail = () => {
     );
   }
 
-  // ── Stock from inventory ──────────────────────────────────────────────────
+  // Stock from inventory — placed after early returns so product is defined
   const rawStock = (dbProduct as any)?.stock_count;
-  const stockCount: number = (rawStock !== null && rawStock !== undefined) ? Number(rawStock) : Infinity;
-  const sizeStock: Record<string, number> = (dbProduct as any)?.size_stock ?? {};
-  const colorStock: Record<string, number> = (dbProduct as any)?.color_stock ?? {};
+  const stockStatus: string = (dbProduct as any)?.stock_status || (product as any).stock_status || "in_stock";
+  // stockCount: use DB number when set; when null but status says low_stock cap at 5 so stepper still blocks
+  const stockCount: number = (rawStock !== null && rawStock !== undefined)
+    ? Number(rawStock)
+    : stockStatus === "low_stock" ? 5
+    : stockStatus === "out_of_stock" || stockStatus === "Out of Stock" ? 0
+    : Infinity;
+  const isLowStock = (stockCount > 0 && stockCount <= 5) || stockStatus === "low_stock";
+  const isOOS = stockCount === 0 || stockStatus === "out_of_stock" || stockStatus === "Out of Stock";
+  const hasRealStockCount = rawStock !== null && rawStock !== undefined;
 
-  // Per-size stock lookup: returns remaining qty for a given size (Infinity if not tracked)
-  const getSizeStock = (size: string): number => {
-    if (sizeStock && Object.keys(sizeStock).length > 0) {
-      return sizeStock[size] !== undefined ? Number(sizeStock[size]) : 0;
-    }
-    return stockCount; // fall back to total if no per-size data
+  // Per-size stock — keyed by size label e.g. { S: 3, M: 0, L: 10 }
+  const sizeStock: Record<string, number> = (dbProduct as any)?.size_stock ?? {};
+  const hasSizeStock = Object.keys(sizeStock).length > 0;
+
+  const getSizeStock = (size: string): number =>
+    hasSizeStock ? (sizeStock[size] ?? 0) : Infinity;
+
+  const isSizeOOS = (size: string): boolean => {
+    if (!hasSizeStock) return false;
+    return getSizeStock(size) === 0;
   };
 
-  const isSizeOOS = (size: string): boolean => getSizeStock(size) === 0;
-
-  const isLowStock = stockCount !== Infinity && stockCount > 0 && stockCount <= 5;
-  const isOOS = stockCount === 0 || (product as any).stock_status === "out_of_stock" || (product as any).stock_status === "Out of Stock";
-
-  // Per-size low stock: used to show inline hints next to size buttons
-  const getSizeLowStockMsg = (size: string): string | null => {
-    const qty = getSizeStock(size);
-    if (qty === 0) return null; // handled as OOS
-    if (qty <= 3) return `${qty} left`;
-    return null;
+  const isSizeLowStock = (size: string): boolean => {
+    if (!hasSizeStock) return false;
+    const s = getSizeStock(size);
+    return s > 0 && s <= LOW_STOCK_THRESHOLD;
   };
 
   const allImages: string[] = (() => {
@@ -151,7 +150,19 @@ const ProductDetail = () => {
 
   const sizeGuideImage = selectedType === "tee" ? "/images/size-guide-tees.png" : "/images/size-guide-tanks.jpg";
 
-  const variants: VariantOption[] = (dbProduct as any)?.variants || (product as any).variants || [];
+  // Resolve variants: prefer tee_variants/tank_variants for tee products, fall back to shared variants
+  const teeVariants: VariantOption[] = (dbProduct as any)?.tee_variants || [];
+  const tankVariants: VariantOption[] = (dbProduct as any)?.tank_variants || [];
+  const sharedVariants: VariantOption[] = (dbProduct as any)?.variants || (product as any).variants || [];
+  const hasSplitVariants = teeVariants.length > 0 || tankVariants.length > 0;
+
+  // Active style-specific variants merged with shared variants
+  const styleVariants: VariantOption[] =
+    hasSplitVariants
+      ? [...(selectedType === "tee" ? teeVariants : tankVariants), ...sharedVariants]
+      : sharedVariants;
+
+  const variants: VariantOption[] = isTeeProduct ? styleVariants : sharedVariants;
   const customInputs: CustomInput[] = (dbProduct as any)?.custom_inputs || (product as any).custom_inputs || [];
 
   const variantGroups: Record<string, VariantOption[]> = {};
@@ -175,6 +186,11 @@ const ProductDetail = () => {
   const handleTypeChange = (type: "tee" | "tank") => {
     setSelectedType(type);
     if (type === "tank" && selectedSize === "XL") setSelectedSize(null);
+    // Reset style-specific variant selections when style changes (tee/tank may have different colour options)
+    if (hasSplitVariants) {
+      setSelectedVariants({});
+      setErrorGroups([]);
+    }
   };
 
   const triggerShake = (groups: string[]) => {
@@ -182,27 +198,14 @@ const ProductDetail = () => {
     setTimeout(() => setShakeGroups([]), 600);
   };
 
-  // Max purchasable qty: min of total stock and selected-size stock
-  const maxQty = (): number => {
-    if (stockCount === Infinity) return 99;
-    if (selectedSize && Object.keys(sizeStock).length > 0) {
-      return Math.min(stockCount, getSizeStock(selectedSize));
-    }
-    return stockCount;
-  };
-
   const handleAddToCart = () => {
+    // 1. Size validation
     if (hasSizes && !selectedSize) {
       toast.error("Please select a size");
       return;
     }
 
-    // Per-size OOS check
-    if (selectedSize && isSizeOOS(selectedSize)) {
-      toast.error(`Size ${selectedSize} is out of stock`);
-      return;
-    }
-
+    // 2. Variant group validation
     const missingVariants = Object.keys(variantGroups).filter((g) => !selectedVariants[g]);
     if (missingVariants.length > 0) {
       setErrorGroups(missingVariants);
@@ -210,6 +213,7 @@ const ProductDetail = () => {
       return;
     }
 
+    // 3. Required custom input validation
     const missingInputs = customInputs.filter((ci) => ci.required && !customValues[ci.id]?.trim()).map((ci) => ci.id);
     if (missingInputs.length > 0) {
       setCustomErrors(missingInputs);
@@ -221,21 +225,36 @@ const ProductDetail = () => {
     setErrorGroups([]);
     setCustomErrors([]);
 
-    // Quantity vs stock check
-    const max = maxQty();
-    if (quantity > max) {
-      setQuantityError(
-        selectedSize && Object.keys(sizeStock).length > 0
-          ? `Only ${max} available in size ${selectedSize}.`
-          : `Only ${max} of this item available in stock.`
-      );
+    // Per-size stock validation (takes priority over total stock check)
+    if (selectedSize && hasSizeStock) {
+      const availableForSize = getSizeStock(selectedSize);
+      if (availableForSize === 0) {
+        setQuantityError(`Size ${selectedSize} is out of stock.`);
+        return;
+      }
+      if (quantity > availableForSize) {
+        setQuantityError(`Only ${availableForSize} left in size ${selectedSize}.`);
+        return;
+      }
+    } else if (stockCount !== Infinity && quantity > stockCount) {
+      // Fall back to total stock check if no per-size data
+      setQuantityError(`Only ${stockCount} of this item available in stock.`);
       return;
     }
     setQuantityError("");
 
+    // Build customisation record for cart display
     const customisation: Record<string, string> = {};
-    Object.entries(selectedVariants).forEach(([label, opt]) => { customisation[label] = opt.name; });
-    customInputs.forEach((ci) => { if (customValues[ci.id]) customisation[ci.label] = customValues[ci.id]; });
+    // Add variant selections
+    Object.entries(selectedVariants).forEach(([label, opt]) => {
+      customisation[label] = opt.name;
+    });
+    // Add custom input values
+    customInputs.forEach((ci) => {
+      if (customValues[ci.id]) {
+        customisation[ci.label] = customValues[ci.id];
+      }
+    });
 
     const regionPrice = region === "UK"
       ? (salePriceGbp ?? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice))
@@ -309,6 +328,7 @@ const ProductDetail = () => {
               <div className="w-full h-full flex items-center justify-center text-4xl">🪡</div>
             )}
 
+            {/* Low stock badge */}
             {isLowStock && !isOOS && (
               <div style={{
                 position: "absolute", top: 10, right: 10, zIndex: 10,
@@ -318,7 +338,7 @@ const ProductDetail = () => {
                 padding: "3px 10px", borderRadius: "999px",
                 boxShadow: "0 1px 6px rgba(0,0,0,0.10)",
               }}>
-                {stockCount <= 3 ? `Only ${stockCount} left!` : "Low Stock"}
+                {hasRealStockCount ? `Only ${stockCount} left!` : "Low stock — order soon!"}
               </div>
             )}
 
@@ -380,6 +400,8 @@ const ProductDetail = () => {
           ) : (
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
               {formatPrice(displayPrice, ((dbProduct as any)?.price_gbp ?? 0) + extraPrice)}
+              {extraPrice > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPrice.toLocaleString()} for selected option)</span>}
+              {extraPrice > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPrice.toLocaleString("en-GB")} for selected option)</span>}
             </p>
           )}
 
@@ -399,49 +421,54 @@ const ProductDetail = () => {
             </>
           )}
 
-          {/* Size selector with per-size stock indicators */}
+          {/* Size */}
           {currentSizes.length > 0 && (
             <>
               <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Size</p>
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-wrap gap-2 mb-8">
                 {currentSizes.map((size: string) => {
-                  const sizeOOS = isSizeOOS(size);
-                  const lowMsg = getSizeLowStockMsg(size);
+                  const oos = isSizeOOS(size);
+                  const low = isSizeLowStock(size);
                   const isSelected = selectedSize === size;
                   return (
-                    <div key={size} className="flex flex-col items-center gap-0.5">
+                    <div key={size} style={{ position: "relative", display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
                       <button
                         onClick={() => {
-                          if (sizeOOS) return;
+                          if (oos) return;
                           setSelectedSize(size);
                           setQuantityError("");
-                          // Reset quantity if it exceeds new size stock
-                          const newMax = getSizeStock(size);
-                          if (quantity > newMax && newMax !== Infinity) setQuantity(Math.min(quantity, newMax));
+                          setQuantity(1);
                         }}
-                        disabled={sizeOOS}
-                        className="w-12 h-12 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
+                        disabled={oos}
+                        title={oos ? `${size} — out of stock` : low ? `${size} — only ${getSizeStock(size)} left` : size}
+                        className="w-12 h-12 rounded-full font-serif text-sm font-bold transition-all duration-200 border-2"
                         style={{
-                          borderColor: isSelected ? "hsl(var(--primary))" : sizeOOS ? "hsl(var(--border))" : "hsl(var(--border))",
-                          backgroundColor: isSelected ? "hsl(var(--primary))" : sizeOOS ? "hsl(var(--muted))" : "transparent",
-                          color: isSelected ? "hsl(var(--primary-foreground))" : sizeOOS ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))",
-                          cursor: sizeOOS ? "not-allowed" : "pointer",
-                          opacity: sizeOOS ? 0.45 : 1,
+                          borderColor: isSelected ? "hsl(var(--primary))" : oos ? "hsl(var(--border))" : "hsl(var(--border))",
+                          backgroundColor: isSelected ? "hsl(var(--primary))" : oos ? "hsl(var(--muted))" : "transparent",
+                          color: isSelected ? "hsl(var(--primary-foreground))" : oos ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))",
+                          cursor: oos ? "not-allowed" : "pointer",
+                          opacity: oos ? 0.55 : 1,
+                          textDecoration: oos ? "line-through" : "none",
                           position: "relative",
-                          textDecoration: sizeOOS ? "line-through" : "none",
-                        }}>
+                        }}
+                      >
                         {size}
+                        {/* strikethrough overlay for OOS */}
+                        {oos && (
+                          <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                            <span style={{ width: "100%", height: 1.5, background: "hsl(var(--muted-foreground))", position: "absolute", transform: "rotate(-35deg)" }} />
+                          </span>
+                        )}
                       </button>
-                      {sizeOOS ? (
-                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "hsl(var(--muted-foreground))", fontWeight: 600 }}>sold out</span>
-                      ) : lowMsg ? (
-                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "#d97706", fontWeight: 700 }}>{lowMsg}</span>
-                      ) : null}
+                      {low && !oos && (
+                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.58rem", fontWeight: 700, color: "#b45309", lineHeight: 1, whiteSpace: "nowrap" }}>
+                          {getSizeStock(size)} left
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <div className="mb-8" />
             </>
           )}
 
@@ -472,21 +499,11 @@ const ProductDetail = () => {
                 >
                   {options.map((opt) => {
                     const isSelected = selected?.name === opt.name;
-                    const optColorStock = colorStock[opt.name];
-                    const colorOOS = optColorStock !== undefined && optColorStock === 0;
                     if (isColorGroup) {
                       return (
-                        <div key={opt.name} className="flex flex-col items-center gap-1">
-                          <button title={opt.name}
-                            onClick={() => {
-                              if (colorOOS) return;
-                              setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt }));
-                              setErrorGroups((e) => e.filter((x) => x !== groupLabel));
-                            }}
-                            disabled={colorOOS}
-                            style={{ width: 32, height: 32, borderRadius: "50%", background: opt.name, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: colorOOS ? "not-allowed" : "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s", opacity: colorOOS ? 0.35 : 1 }} />
-                          {colorOOS && <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", color: "hsl(var(--muted-foreground))" }}>out</span>}
-                        </div>
+                        <button key={opt.name} title={opt.name}
+                          onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
+                          style={{ width: 32, height: 32, borderRadius: "50%", background: opt.name, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
                       );
                     }
                     return (
@@ -517,6 +534,7 @@ const ProductDetail = () => {
                     <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
                       {ci.label}{ci.required && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
                     </p>
+
                     {ci.type === "text" && (
                       <input type="text" value={customValues[ci.id] || ""}
                         onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
@@ -562,62 +580,66 @@ const ProductDetail = () => {
             </div>
           )}
 
-          {/* Stock warning banner */}
-          {isLowStock && !isOOS && (
+          {/* Stock status */}
+          {isLowStock && !isOOS && !selectedSize && (
             <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
               <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#92400e", margin: 0 }}>
-                ⚡ {getLowStockMessage(stockCount)}
+                ⚠ {hasRealStockCount ? `Only ${stockCount} left in stock — order soon!` : "Low stock — order soon!"}
               </p>
             </div>
           )}
-
-          {/* Selected-size specific low stock warning */}
-          {selectedSize && !isSizeOOS(selectedSize) && getSizeStock(selectedSize) <= 3 && getSizeStock(selectedSize) > 0 && Object.keys(sizeStock).length > 0 && (
-            <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
-              <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#c2410c", margin: 0 }}>
-                🔥 Only {getSizeStock(selectedSize)} left in size {selectedSize} — order soon!
+          {selectedSize && hasSizeStock && isSizeLowStock(selectedSize) && (
+            <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#92400e", margin: 0 }}>
+                ⚠ Only {getSizeStock(selectedSize)} left in size {selectedSize} — order soon!
               </p>
             </div>
           )}
 
           {/* Quantity selector */}
-          {!isOOS && (
-            <div className="mb-4">
-              <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Quantity</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <button
-                  onClick={() => { const q = Math.max(1, quantity - 1); setQuantity(q); setQuantityError(""); }}
-                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center" }}
-                >−</button>
-                <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: "hsl(var(--foreground))", minWidth: 24, textAlign: "center" }}>{quantity}</span>
-                <button
-                  onClick={() => {
-                    const max = maxQty();
-                    if (quantity >= max) {
-                      setQuantityError(
-                        selectedSize && Object.keys(sizeStock).length > 0
-                          ? `Only ${max} available in size ${selectedSize}.`
-                          : `Only ${max} of this item available in stock.`
-                      );
-                      return;
-                    }
-                    setQuantity(quantity + 1);
-                    setQuantityError("");
-                  }}
-                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center" }}
-                >+</button>
+          {!isOOS && !(selectedSize && hasSizeStock && isSizeOOS(selectedSize)) && (() => {
+            const qtyMax = selectedSize && hasSizeStock
+              ? getSizeStock(selectedSize)
+              : stockCount !== Infinity ? stockCount : 99;
+            const atMax = quantity >= qtyMax;
+            return (
+              <div className="mb-4">
+                <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Quantity</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    onClick={() => { const q = Math.max(1, quantity - 1); setQuantity(q); setQuantityError(""); }}
+                    style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >−</button>
+                  <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: "hsl(var(--foreground))", minWidth: 24, textAlign: "center" }}>{quantity}</span>
+                  <button
+                    disabled={atMax}
+                    onClick={() => {
+                      if (atMax) {
+                        setQuantityError(
+                          selectedSize && hasSizeStock
+                            ? `Only ${qtyMax} left in size ${selectedSize}.`
+                            : `Only ${qtyMax} in stock.`
+                        );
+                        return;
+                      }
+                      setQuantity(quantity + 1);
+                      setQuantityError("");
+                    }}
+                    style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: atMax ? "not-allowed" : "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: atMax ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center", opacity: atMax ? 0.35 : 1, transition: "opacity 0.15s, color 0.15s" }}
+                  >+</button>
+                </div>
+                {quantityError && (
+                  <p style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", color: "#dc2626", marginTop: 6 }}>{quantityError}</p>
+                )}
               </div>
-              {quantityError && (
-                <p style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", color: "#dc2626", marginTop: 6, fontWeight: 700 }}>⚠ {quantityError}</p>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* Add to cart */}
-          {isOOS ? (
+          {isOOS || (selectedSize && hasSizeStock && isSizeOOS(selectedSize)) ? (
             <button disabled className="w-full border-none rounded-full py-4 font-serif font-extrabold text-sm tracking-[0.2em] uppercase mb-8"
               style={{ background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", cursor: "not-allowed", opacity: 0.65 }}>
-              Out of Stock
+              {selectedSize && hasSizeStock && isSizeOOS(selectedSize) ? `Size ${selectedSize} Out of Stock` : "Out of Stock"}
             </button>
           ) : (
             <button onClick={handleAddToCart}

@@ -44,6 +44,8 @@ const emptyProduct = {
   available_as: [] as string[], product_tags: [] as string[],
   stock_status: "in_stock", display_order: 0,
   variants: [] as VariantOption[],
+  tee_variants: [] as VariantOption[],
+  tank_variants: [] as VariantOption[],
   custom_inputs: [] as CustomInput[],
 };
 
@@ -76,6 +78,8 @@ export default function AdminProducts() {
   const [uploadingExtra, setUploadingExtra]   = useState(false);
 
   // ── Variant (option choice) draft ──
+  // variantTarget: which array to add to — 'variants', 'tee_variants', or 'tank_variants'
+  const [variantTarget, setVariantTarget] = useState<'variants' | 'tee_variants' | 'tank_variants'>('variants');
   const [vLabel, setVLabel]     = useState("Color");
   const [vName, setVName]       = useState("");
   const [vPriceDiff, setVPriceDiff] = useState(0);
@@ -97,6 +101,8 @@ export default function AdminProducts() {
       ...p,
       images: p.images || [],
       variants: p.variants || [],
+      tee_variants: p.tee_variants || [],
+      tank_variants: p.tank_variants || [],
       custom_inputs: p.custom_inputs || [],
     });
     setOpen(true);
@@ -158,17 +164,17 @@ export default function AdminProducts() {
   };
 
   // ── Variant helpers ──
-  const addVariant = () => {
+  const addVariant = (target: 'variants' | 'tee_variants' | 'tank_variants' = variantTarget) => {
     if (!vName.trim()) return;
     setEditProduct((prev: any) => ({
       ...prev,
-      variants: [...(prev.variants || []), { label: vLabel, name: vName.trim(), price_diff: vPriceDiff }],
+      [target]: [...(prev[target] || []), { label: vLabel, name: vName.trim(), price_diff: vPriceDiff }],
     }));
     setVName(""); setVPriceDiff(0);
   };
 
-  const removeVariant = (idx: number) =>
-    setEditProduct((prev: any) => ({ ...prev, variants: prev.variants.filter((_: any, i: number) => i !== idx) }));
+  const removeVariant = (idx: number, target: 'variants' | 'tee_variants' | 'tank_variants' = 'variants') =>
+    setEditProduct((prev: any) => ({ ...prev, [target]: (prev[target] || []).filter((_: any, i: number) => i !== idx) }));
 
   // ── Custom input helpers ──
   const addCustomInput = () => {
@@ -239,9 +245,15 @@ export default function AdminProducts() {
                 {p.sizes?.map((s: string) => (
                   <span key={s} className="font-serif text-[10px] px-2 py-0.5 bg-secondary rounded-full text-foreground/70">{s}</span>
                 ))}
-                {p.variants?.length > 0 && (
-                  <span className="font-serif text-[10px] px-2 py-0.5 bg-accent/60 rounded-full text-foreground/70">{p.variants.length} option{p.variants.length !== 1 ? "s" : ""}</span>
-                )}
+                {((p.variants?.length || 0) + (p.tee_variants?.length || 0) + (p.tank_variants?.length || 0)) > 0 && (() => {
+                  const total = (p.variants?.length || 0) + (p.tee_variants?.length || 0) + (p.tank_variants?.length || 0);
+                  const hasSplit = (p.tee_variants?.length || 0) > 0 || (p.tank_variants?.length || 0) > 0;
+                  return (
+                    <span className="font-serif text-[10px] px-2 py-0.5 bg-accent/60 rounded-full text-foreground/70">
+                      {total} option{total !== 1 ? "s" : ""}{hasSplit ? " (split)" : ""}
+                    </span>
+                  );
+                })()}
                 {p.custom_inputs?.length > 0 && (
                   <span className="font-serif text-[10px] px-2 py-0.5 bg-secondary rounded-full text-foreground/70">{p.custom_inputs.length} custom field{p.custom_inputs.length !== 1 ? "s" : ""}</span>
                 )}
@@ -386,53 +398,111 @@ export default function AdminProducts() {
 
               {/* ═══════════════════════════════════════════════════════════
                   VARIANT OPTIONS — dropdown choices customer selects from
-                  (e.g. Color: Red / Blue / Green  or  Charm: Chilli / Olive)
+                  For Tees & Tank Tops: separate sections per style.
+                  For other categories: single shared section.
                   ═══════════════════════════════════════════════════════════ */}
-              <div className="space-y-2">
-                <SectionLabel>Variant Options <span className="normal-case font-normal text-[10px]">— selectable choices (colour, style…)</span></SectionLabel>
 
-                {/* Existing variants */}
-                {editProduct.variants?.length > 0 && (
-                  <div className="space-y-1.5">
-                    {editProduct.variants.map((v: VariantOption, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2 bg-secondary/40 rounded-lg px-3 py-2">
-                        {/* colour swatch preview */}
-                        {v.label.toLowerCase() === "color" || v.label.toLowerCase() === "colour" ? (
-                          <span style={{ width: 14, height: 14, borderRadius: "50%", background: v.name, border: "1px solid hsl(var(--border))", flexShrink: 0 }} />
-                        ) : null}
-                        <span className="font-serif text-xs text-muted-foreground flex-shrink-0">{v.label}:</span>
-                        <span className="font-serif text-xs font-bold text-foreground flex-1">{v.name}</span>
-                        {v.price_diff !== 0 && <span className="font-serif text-xs text-muted-foreground">{v.price_diff > 0 ? "+" : ""}PKR {v.price_diff}</span>}
-                        <button onClick={() => removeVariant(idx)} className="w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
+              {/* ── Shared variant add form (reused for all targets) ── */}
+              {(() => {
+                const isTeeCategory = editProduct.category === "Tees & Tank Tops";
+
+                const VariantRow = ({ v, idx, target }: { v: VariantOption; idx: number; target: 'variants' | 'tee_variants' | 'tank_variants' }) => (
+                  <div className="flex items-center gap-2 bg-secondary/40 rounded-lg px-3 py-2">
+                    {(v.label.toLowerCase() === "color" || v.label.toLowerCase() === "colour") && (
+                      <span style={{ width: 14, height: 14, borderRadius: "50%", background: v.name, border: "1px solid hsl(var(--border))", flexShrink: 0 }} />
+                    )}
+                    <span className="font-serif text-xs text-muted-foreground flex-shrink-0">{v.label}:</span>
+                    <span className="font-serif text-xs font-bold text-foreground flex-1">{v.name}</span>
+                    {v.price_diff !== 0 && <span className="font-serif text-xs text-muted-foreground">{v.price_diff > 0 ? "+" : ""}PKR {v.price_diff}</span>}
+                    <button onClick={() => removeVariant(idx, target)} className="w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
+                  </div>
+                );
+
+                const AddVariantForm = ({ target, label }: { target: 'variants' | 'tee_variants' | 'tank_variants'; label: string }) => (
+                  <div className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
+                    <p className="font-serif text-[11px] text-muted-foreground font-bold">{label}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="font-serif text-[10px]">Label (e.g. Color)</Label>
+                        <Input value={variantTarget === target ? vLabel : "Color"} onChange={(e) => { setVariantTarget(target); setVLabel(e.target.value); }} onFocus={() => setVariantTarget(target)} placeholder="Color" className="font-serif text-xs h-8 mt-1" />
                       </div>
-                    ))}
+                      <div>
+                        <Label className="font-serif text-[10px]">Value (e.g. Red or #FF0000)</Label>
+                        <Input value={variantTarget === target ? vName : ""} onChange={(e) => { setVariantTarget(target); setVName(e.target.value); }} onFocus={() => setVariantTarget(target)} placeholder="Red" className="font-serif text-xs h-8 mt-1" />
+                      </div>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label className="font-serif text-[10px]">Price diff (PKR, 0 = same)</Label>
+                        <Input type="number" value={variantTarget === target ? vPriceDiff : 0} onChange={(e) => { setVariantTarget(target); setVPriceDiff(Number(e.target.value)); }} onFocus={() => setVariantTarget(target)} className="font-serif text-xs h-8 mt-1" />
+                      </div>
+                      <Button onClick={() => { setVariantTarget(target); addVariant(target); }} disabled={variantTarget === target ? !vName.trim() : true} size="sm" className="font-serif h-8 text-xs">
+                        <Plus className="h-3 w-3 mr-1" /> Add
+                      </Button>
+                    </div>
                   </div>
-                )}
+                );
 
-                {/* Add variant */}
-                <div className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
-                  <p className="font-serif text-[11px] text-muted-foreground">Add option:</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="font-serif text-[10px]">Label (e.g. Color)</Label>
-                      <Input value={vLabel} onChange={(e) => setVLabel(e.target.value)} placeholder="Color" className="font-serif text-xs h-8 mt-1" />
-                    </div>
-                    <div>
-                      <Label className="font-serif text-[10px]">Value (e.g. Red or #FF0000)</Label>
-                      <Input value={vName} onChange={(e) => setVName(e.target.value)} placeholder="Red" className="font-serif text-xs h-8 mt-1" />
-                    </div>
+                if (isTeeCategory) {
+                  return (
+                    <>
+                      {/* Tee Variants */}
+                      <div className="space-y-2">
+                        <SectionLabel>👕 Tee Variants <span className="normal-case font-normal text-[10px]">— shown only when customer picks Tee</span></SectionLabel>
+                        {(editProduct.tee_variants || []).length > 0 && (
+                          <div className="space-y-1.5">
+                            {(editProduct.tee_variants || []).map((v: VariantOption, idx: number) => (
+                              <VariantRow key={idx} v={v} idx={idx} target="tee_variants" />
+                            ))}
+                          </div>
+                        )}
+                        <AddVariantForm target="tee_variants" label="Add tee option:" />
+                      </div>
+
+                      {/* Tank Variants */}
+                      <div className="space-y-2 mt-1">
+                        <SectionLabel>🎽 Tank Variants <span className="normal-case font-normal text-[10px]">— shown only when customer picks Tank</span></SectionLabel>
+                        {(editProduct.tank_variants || []).length > 0 && (
+                          <div className="space-y-1.5">
+                            {(editProduct.tank_variants || []).map((v: VariantOption, idx: number) => (
+                              <VariantRow key={idx} v={v} idx={idx} target="tank_variants" />
+                            ))}
+                          </div>
+                        )}
+                        <AddVariantForm target="tank_variants" label="Add tank option:" />
+                      </div>
+
+                      {/* Shared / fallback variants for this product */}
+                      <div className="space-y-2 mt-1">
+                        <SectionLabel>Shared Variants <span className="normal-case font-normal text-[10px]">— shown for both styles (e.g. non-colour options)</span></SectionLabel>
+                        {(editProduct.variants || []).length > 0 && (
+                          <div className="space-y-1.5">
+                            {(editProduct.variants || []).map((v: VariantOption, idx: number) => (
+                              <VariantRow key={idx} v={v} idx={idx} target="variants" />
+                            ))}
+                          </div>
+                        )}
+                        <AddVariantForm target="variants" label="Add shared option:" />
+                      </div>
+                    </>
+                  );
+                }
+
+                // Non-tee products: single generic section
+                return (
+                  <div className="space-y-2">
+                    <SectionLabel>Variant Options <span className="normal-case font-normal text-[10px]">— selectable choices (colour, style…)</span></SectionLabel>
+                    {(editProduct.variants || []).length > 0 && (
+                      <div className="space-y-1.5">
+                        {(editProduct.variants || []).map((v: VariantOption, idx: number) => (
+                          <VariantRow key={idx} v={v} idx={idx} target="variants" />
+                        ))}
+                      </div>
+                    )}
+                    <AddVariantForm target="variants" label="Add option:" />
                   </div>
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label className="font-serif text-[10px]">Price diff (PKR, 0 = same)</Label>
-                      <Input type="number" value={vPriceDiff} onChange={(e) => setVPriceDiff(Number(e.target.value))} className="font-serif text-xs h-8 mt-1" />
-                    </div>
-                    <Button onClick={addVariant} disabled={!vName.trim()} size="sm" className="font-serif h-8 text-xs">
-                      <Plus className="h-3 w-3 mr-1" /> Add
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* ═══════════════════════════════════════════════════════════
                   CUSTOM INPUTS — free-form fields customer fills in

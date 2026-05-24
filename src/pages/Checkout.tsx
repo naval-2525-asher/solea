@@ -95,11 +95,30 @@ const Checkout = () => {
     (allProducts as any[]).map((p: any) => [String(p.id), p])
   );
 
-  // For each cart item check if requested qty exceeds stock_count
-  const stockErrors: { name: string; available: number; requested: number }[] = [];
+  // For each cart item check if requested qty exceeds stock_count or size-specific stock
+  const stockErrors: { name: string; size?: string; available: number; requested: number }[] = [];
   for (const item of items) {
     const product = productMap.get(String(item.productId));
     if (!product) continue;
+
+    // Per-size stock check (takes priority)
+    const sizeStock: Record<string, number> = product.size_stock ?? {};
+    const hasSizeStock = Object.keys(sizeStock).length > 0;
+
+    if (hasSizeStock && item.size && item.size !== "One Size") {
+      const sizeAvailable = sizeStock[item.size] ?? 0;
+      if (item.quantity > sizeAvailable) {
+        stockErrors.push({
+          name: item.name,
+          size: item.size,
+          available: sizeAvailable,
+          requested: item.quantity,
+        });
+        continue; // skip total-stock check if we already have a size-level error
+      }
+    }
+
+    // Fall back to total stock check
     const stockCount: number =
       product.stock_count !== null && product.stock_count !== undefined
         ? Number(product.stock_count)
@@ -238,13 +257,16 @@ const Checkout = () => {
                 </p>
                 {stockErrors.map((err, i) => (
                   <p key={i} className="font-serif text-xs text-amber-800">
-                    <strong>{err.name}</strong> — you have {err.requested} in cart, but only{" "}
+                    <strong>{err.name}{err.size ? ` (size ${err.size})` : ""}</strong> —{" "}
                     {err.available === 0 ? (
-                      <strong>none available</strong>
+                      err.size ? (
+                        <>size <strong>{err.size} is out of stock</strong></>
+                      ) : (
+                        <strong>none available</strong>
+                      )
                     ) : (
-                      <>
-                        <strong>{err.available}</strong> available
-                      </>
+                      <>you have {err.requested} in cart, but only{" "}
+                        <strong>{err.available}</strong> available{err.size ? ` in size ${err.size}` : ""}</>
                     )}
                   </p>
                 ))}
@@ -375,15 +397,28 @@ const Checkout = () => {
           <div className="space-y-3">
             {items.map((item) => {
               const product = productMap.get(String(item.productId));
+
+              // Per-size check
+              const sizeStock: Record<string, number> = product?.size_stock ?? {};
+              const hasSzStock = Object.keys(sizeStock).length > 0;
+              const sizeAvailable = hasSzStock && item.size && item.size !== "One Size"
+                ? (sizeStock[item.size] ?? 0)
+                : null;
+              const sizeOOS = sizeAvailable !== null && sizeAvailable === 0;
+              const sizeExceeds = sizeAvailable !== null && !sizeOOS && item.quantity > sizeAvailable;
+
+              // Total stock fallback
               const stockCount: number =
                 product?.stock_count !== null && product?.stock_count !== undefined
                   ? Number(product.stock_count)
                   : Infinity;
               const isOOS =
-                stockCount === 0 ||
-                product?.stock_status === "out_of_stock" ||
-                product?.stock_status === "Out of Stock";
-              const exceedsStock = stockCount !== Infinity && item.quantity > stockCount;
+                !sizeOOS && !sizeExceeds && (
+                  stockCount === 0 ||
+                  product?.stock_status === "out_of_stock" ||
+                  product?.stock_status === "Out of Stock"
+                );
+              const exceedsStock = !sizeOOS && !sizeExceeds && stockCount !== Infinity && item.quantity > stockCount;
               const colour = item.customisation?.Colour;
 
               return (
@@ -392,15 +427,23 @@ const Checkout = () => {
                   className="flex justify-between items-start font-serif text-sm"
                 >
                   <div className="flex flex-col gap-0.5">
-                    <span className={`text-foreground ${exceedsStock || isOOS ? "text-destructive" : ""}`}>
+                    <span className={`text-foreground ${exceedsStock || isOOS || sizeOOS || sizeExceeds ? "text-destructive" : ""}`}>
                       {item.name}
                       {colour ? ` · ${colour}` : ""}
                       {" · "}{item.size} × {item.quantity}
                     </span>
-                    {isOOS && (
+                    {sizeOOS && (
+                      <span className="text-destructive text-xs font-bold">Size {item.size} is out of stock</span>
+                    )}
+                    {sizeExceeds && !sizeOOS && (
+                      <span className="text-destructive text-xs font-bold">
+                        Only {sizeAvailable} available in size {item.size} — please reduce qty
+                      </span>
+                    )}
+                    {isOOS && !sizeOOS && !sizeExceeds && (
                       <span className="text-destructive text-xs font-bold">This item is out of stock</span>
                     )}
-                    {!isOOS && exceedsStock && (
+                    {!isOOS && exceedsStock && !sizeOOS && !sizeExceeds && (
                       <span className="text-destructive text-xs font-bold">
                         Only {stockCount} available — please reduce qty in cart
                       </span>

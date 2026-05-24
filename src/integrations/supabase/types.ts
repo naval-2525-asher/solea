@@ -233,6 +233,10 @@ export type Database = {
           price_gbp: number | null
           stock_count: number | null
           product_tags: string[]
+          size_stock: Json | null
+          color_stock: Json | null
+          tee_variants: Json | null
+          tank_variants: Json | null
           sizes: string[]
           stock_status: string
           updated_at: string
@@ -252,6 +256,10 @@ export type Database = {
           price?: number
           price_gbp?: number | null
           stock_count?: number | null
+          size_stock?: Json | null
+          color_stock?: Json | null
+          tee_variants?: Json | null
+          tank_variants?: Json | null
           product_tags?: string[]
           sizes?: string[]
           stock_status?: string
@@ -272,6 +280,10 @@ export type Database = {
           price?: number
           price_gbp?: number | null
           stock_count?: number | null
+          size_stock?: Json | null
+          color_stock?: Json | null
+          tee_variants?: Json | null
+          tank_variants?: Json | null
           product_tags?: string[]
           sizes?: string[]
           stock_status?: string
