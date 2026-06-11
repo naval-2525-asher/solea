@@ -240,6 +240,10 @@ export type Database = {
           sizes: string[]
           stock_status: string
           updated_at: string
+          size_guide_tee: string | null
+          size_guide_tank: string | null
+          tee_description: string | null
+          tank_description: string | null
         }
         Insert: {
           available_as?: string[]
@@ -264,6 +268,10 @@ export type Database = {
           sizes?: string[]
           stock_status?: string
           updated_at?: string
+          size_guide_tee?: string | null
+          size_guide_tank?: string | null
+          tee_description?: string | null
+          tank_description?: string | null
         }
         Update: {
           available_as?: string[]
@@ -288,6 +296,10 @@ export type Database = {
           sizes?: string[]
           stock_status?: string
           updated_at?: string
+          size_guide_tee?: string | null
+          size_guide_tank?: string | null
+          tee_description?: string | null
+          tank_description?: string | null
         }
         Relationships: []
       }
