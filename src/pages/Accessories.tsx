@@ -7,31 +7,8 @@ import FilterSortBar, { ViewMode } from "@/components/FilterSortBar";
 import { useFilterSort } from "@/hooks/useFilterSort";
 import { useRegion } from "@/context/RegionContext";
 
-export const accessoryProductsStatic = [
-  {
-    id: "bag-charm",
-    name: "Bag Charms",
-    price: 2500,
-    image: "/accessories/bag-charm.jpeg",
-    variants: [
-      { label: "Style", name: "Chilli Charm", price_diff: 0 },
-      { label: "Style", name: "Olive Charm", price_diff: 0 },
-    ],
-  },
-  {
-    id: "beaded-bag-charm",
-    name: "Beaded Bag Charms",
-    price: 3000,
-    image: "/accessories/beaded-charm.jpeg",
-    variants: [
-      { label: "Style", name: "Pink Palm Tree", price_diff: 0 },
-      { label: "Style", name: "Palm Tree", price_diff: 0 },
-      { label: "Style", name: "Seashell", price_diff: 0 },
-      { label: "Style", name: "Bouquet", price_diff: 0 },
-      { label: "Style", name: "Starfish", price_diff: 0 },
-    ],
-  },
-];
+// ─── Static list REMOVED — accessories now come entirely from Supabase ────────
+// Any accessory you add in the admin panel will appear here automatically.
 
 const isOutOfStock = (product: any) =>
   product.stock_status === "out_of_stock" || product.stock_status === "Out of Stock";
@@ -58,9 +35,9 @@ const ProductCard = ({
   salePrice?: number;
   salePriceGbp?: number;
 }) => {
-  const oos = isOutOfStock(product);
+  const oos       = isOutOfStock(product);
   const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
-  const discount = salePrice ? calcDiscount(product.price, salePrice) : null;
+  const discount  = salePrice ? calcDiscount(product.price, salePrice) : null;
   const { formatPrice, region } = useRegion();
 
   return (
@@ -112,13 +89,13 @@ const ProductCard = ({
           style={{ height: imgHeight, transition: "height 0.3s ease" }}
         >
           <img
-            src={product.image}
+            src={product.image || product.images?.[0] || ""}
             alt={product.name}
             className="w-full h-full object-cover"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
               const p = (e.currentTarget as HTMLImageElement).parentElement;
-              if (p) p.innerHTML = '<span style="font-size:2rem">🌶️</span>';
+              if (p) p.innerHTML = '<span style="font-size:2rem">✨</span>';
             }}
           />
         </div>
@@ -126,10 +103,7 @@ const ProductCard = ({
           <p className="text-foreground font-serif font-bold text-base mb-0.5">{product.name}</p>
           {salePrice ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <p
-                className="font-serif text-sm"
-                style={{ textDecoration: "line-through", opacity: 0.5 }}
-              >
+              <p className="font-serif text-sm" style={{ textDecoration: "line-through", opacity: 0.5 }}>
                 {formatPrice(product.price, product.price_gbp)}
               </p>
               <p className="text-foreground font-serif text-sm font-bold">
@@ -155,7 +129,7 @@ const ProductCard = ({
                 textTransform: "uppercase", cursor: "not-allowed", opacity: 0.7,
               }}
             >
-              Add to Cart
+              Out of Stock
             </button>
           )}
         </div>
@@ -166,9 +140,8 @@ const ProductCard = ({
 
 const Accessories = () => {
   const { data: dbProducts = [], isLoading } = useProducts();
-  const { data: saleData = [] } = useSaleProducts();
+  const { data: saleData = [] }              = useSaleProducts();
 
-  // Map includes both PKR and GBP sale prices
   const salePriceMap = Object.fromEntries(
     (saleData as any[]).map((s: any) => [
       s.product_id,
@@ -176,13 +149,13 @@ const Accessories = () => {
     ])
   );
 
-  const dbAccessories = dbProducts.filter((p: any) => p.category === "Accessories");
-  const displayProducts = dbAccessories.length > 0 ? dbAccessories : accessoryProductsStatic;
+  // ── Only show products from the Accessories category in Supabase ──
+  const accessories = (dbProducts as any[]).filter((p: any) => p.category === "Accessories");
 
   const initialViewMode = (): ViewMode =>
     typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple";
-  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
-  const userChangedView = useRef(false);
+  const [viewMode, setViewMode]   = useState<ViewMode>(initialViewMode);
+  const userChangedView           = useRef(false);
 
   const handleViewModeChange = (mode: ViewMode) => {
     userChangedView.current = true;
@@ -199,7 +172,7 @@ const Accessories = () => {
   }, []);
 
   const { sortBy, filters, sorted, filtered, maxPrice, hasFiltersApplied, setSortBy, setFilters } =
-    useFilterSort(displayProducts, false);
+    useFilterSort(accessories, false);
 
   return (
     <main className="min-h-screen">
@@ -210,9 +183,9 @@ const Accessories = () => {
         </h1>
       </div>
       <div className="px-6 pb-16 max-w-[1100px] mx-auto">
-        {!isLoading && (
+        {!isLoading && accessories.length > 0 && (
           <FilterSortBar
-            products={displayProducts}
+            products={accessories}
             filteredCount={filtered.length}
             sortBy={sortBy}
             filters={filters}
@@ -225,13 +198,12 @@ const Accessories = () => {
             onViewModeChange={handleViewModeChange}
           />
         )}
+
         {isLoading ? (
+          /* Loading skeleton */
           <div style={getGridStyle(viewMode)}>
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="bg-card rounded-lg overflow-hidden border border-border animate-pulse"
-              >
+              <div key={i} className="bg-card rounded-lg overflow-hidden border border-border animate-pulse">
                 <div className="h-[340px] bg-secondary/50" />
                 <div className="p-3 space-y-2">
                   <div className="h-3 bg-secondary/50 rounded w-3/4" />
@@ -253,22 +225,9 @@ const Accessories = () => {
             ))}
           </div>
         ) : (
-          <div
-            style={{
-              minHeight: "30vh",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "Georgia, 'Times New Roman', serif",
-                fontSize: "0.9rem",
-                color: "hsl(var(--muted-foreground))",
-              }}
-            >
-              No products match your filters.
+          <div style={{ minHeight: "30vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.9rem", color: "hsl(var(--muted-foreground))" }}>
+              {hasFiltersApplied ? "No products match your filters." : "No accessories available right now."}
             </p>
           </div>
         )}

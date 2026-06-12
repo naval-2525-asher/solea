@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { accessoryProductsStatic } from "./Accessories";
 import { useCart } from "@/context/CartContext";
 import { toast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
@@ -40,8 +39,7 @@ const AccessoryDetail = () => {
     enabled: !!id,
   });
 
-  const staticProduct = accessoryProductsStatic.find((p) => p.id === id);
-  const rawProduct = dbProduct || staticProduct;
+  const rawProduct = dbProduct;
 
   const { addToCart } = useCart();
   const { region, formatPrice } = useRegion();
