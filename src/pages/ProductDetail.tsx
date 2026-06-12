@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,6 +51,16 @@ const ProductDetail = () => {
 
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"tee" | "tank">("tee");
+
+  // Once dbProduct loads, set correct default style based on available_as
+  useEffect(() => {
+    if (!dbProduct) return;
+    const availableAs: string[] = (dbProduct as any)?.available_as || [];
+    const hasTee = availableAs.length === 0 || availableAs.includes("tee");
+    const hasTank = availableAs.length === 0 || availableAs.includes("tank");
+    if (!hasTee && hasTank) setSelectedType("tank");
+    else setSelectedType("tee");
+  }, [(dbProduct as any)?.id]);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, VariantOption>>({});
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
@@ -121,9 +131,11 @@ const ProductDetail = () => {
 
   const teeSizes = availableSizes;
   const tankSizes = availableSizes.filter((s: string) => s !== "XL");
-  const currentSizes = isTeeProduct ? (selectedType === "tee" ? teeSizes : tankSizes) : availableSizes;
+  const currentSizes = (isTeeProduct || isLimited) ? (selectedType === "tee" ? teeSizes : tankSizes) : availableSizes;
 
-  const sizeGuideImage = selectedType === "tee" ? "/images/size-guide-tees.png" : "/images/size-guide-tanks.jpg";
+  const sizeGuideImage = selectedType === "tee"
+    ? ((dbProduct as any)?.size_guide_tee || "/images/size-guide-tees.png")
+    : ((dbProduct as any)?.size_guide_tank || "/images/size-guide-tanks.jpg");
 
   const variants: VariantOption[] = (dbProduct as any)?.variants || (product as any).variants || [];
   const customInputs: CustomInput[] = (dbProduct as any)?.custom_inputs || (product as any).custom_inputs || [];
@@ -353,20 +365,26 @@ const ProductDetail = () => {
           )}
 
           {/* Style toggle */}
-          {isTeeProduct && (
-            <>
-              <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Style</p>
-              <div className="flex gap-2 mb-8">
-                {(["tee", "tank"] as const).map((type) => (
-                  <button key={type} onClick={() => handleTypeChange(type)}
-                    className="px-6 py-2 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
-                    style={{ borderColor: selectedType === type ? "hsl(var(--primary))" : "hsl(var(--border))", backgroundColor: selectedType === type ? "hsl(var(--primary))" : "transparent", color: selectedType === type ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
-                    {type === "tee" ? "Tee" : "Tank"}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          {(isTeeProduct || isLimited) && (() => {
+            const availableAs: string[] = (dbProduct as any)?.available_as || [];
+            const hasTee = availableAs.length === 0 || availableAs.includes("tee");
+            const hasTank = availableAs.length === 0 || availableAs.includes("tank");
+            if (!hasTee || !hasTank) return null;
+            return (
+              <>
+                <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Style</p>
+                <div className="flex gap-2 mb-8">
+                  {(["tee", "tank"] as const).filter((t) => availableAs.length === 0 || availableAs.includes(t)).map((type) => (
+                    <button key={type} onClick={() => handleTypeChange(type)}
+                      className="px-6 py-2 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
+                      style={{ borderColor: selectedType === type ? "hsl(var(--primary))" : "hsl(var(--border))", backgroundColor: selectedType === type ? "hsl(var(--primary))" : "transparent", color: selectedType === type ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
+                      {type === "tee" ? "Tee" : "Tank"}
+                    </button>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
 
           {/* Size */}
           {currentSizes.length > 0 && (
@@ -544,20 +562,28 @@ const ProductDetail = () => {
           )}
 
           {/* Accordions */}
-          {isTeeProduct && (
-            <div className="border-t border-border">
-              <button onClick={() => setSizeGuideOpen((p) => !p)}
-                className="w-full bg-transparent border-none py-4 flex justify-between items-center cursor-pointer text-foreground font-serif text-base font-bold">
-                Size Guide
-                <span className="text-xl transition-transform duration-200" style={{ transform: sizeGuideOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
-              </button>
-              {sizeGuideOpen && (
-                <div className="pb-4">
-                  <img src={sizeGuideImage} alt="Size Guide" className="w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setSizeGuideZoomed(true)} />
-                </div>
-              )}
-            </div>
-          )}
+          {(isTeeProduct || isLimited) && (() => {
+            const availableAs: string[] = (dbProduct as any)?.available_as || [];
+            const hasTee = availableAs.length === 0 || availableAs.includes("tee");
+            const hasTank = availableAs.length === 0 || availableAs.includes("tank");
+            const label = hasTee && hasTank
+              ? `Size Guide — ${selectedType === "tee" ? "Tee" : "Tank"}`
+              : hasTank ? "Size Guide — Tank" : "Size Guide — Tee";
+            return (
+              <div className="border-t border-border">
+                <button onClick={() => setSizeGuideOpen((p) => !p)}
+                  className="w-full bg-transparent border-none py-4 flex justify-between items-center cursor-pointer text-foreground font-serif text-base font-bold">
+                  {label}
+                  <span className="text-xl transition-transform duration-200" style={{ transform: sizeGuideOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
+                </button>
+                {sizeGuideOpen && (
+                  <div className="pb-4">
+                    <img src={sizeGuideImage} alt="Size Guide" className="w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setSizeGuideZoomed(true)} />
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="border-t border-border">
             <button onClick={() => setDescOpen((p) => !p)}
@@ -565,7 +591,13 @@ const ProductDetail = () => {
               Description
               <span className="text-xl transition-transform duration-200" style={{ transform: descOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
             </button>
-            {descOpen && <p className="text-foreground font-serif text-sm leading-relaxed opacity-75 pb-4">{product.description}</p>}
+            {descOpen && <p className="text-foreground font-serif text-sm leading-relaxed opacity-75 pb-4">
+              {(isTeeProduct || isLimited)
+                ? (selectedType === "tee"
+                    ? ((dbProduct as any)?.tee_description || "")
+                    : ((dbProduct as any)?.tank_description || ""))
+                : product.description}
+            </p>}
           </div>
 
           <div className="border-t border-b border-border">

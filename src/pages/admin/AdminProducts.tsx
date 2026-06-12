@@ -53,6 +53,10 @@ const emptyProduct = {
   stock_status: "in_stock", display_order: 0,
   variants: [] as VariantOption[],
   custom_inputs: [] as CustomInput[],
+  size_guide_tee: "/images/size-guide-tees.png",
+  size_guide_tank: "/images/size-guide-tanks.jpg",
+  tee_description: "",
+  tank_description: "",
 };
 
 const uid = () => Math.random().toString(36).slice(2, 8);
@@ -146,6 +150,8 @@ export default function AdminProducts() {
   const [deleteId,       setDeleteId]       = useState<string | null>(null);
   const [uploading,      setUploading]      = useState(false);
   const [uploadingExtra, setUploadingExtra] = useState(false);
+  const [uploadingSgTee,  setUploadingSgTee]  = useState(false);
+  const [uploadingSgTank, setUploadingSgTank] = useState(false);
 
   // Variant draft
   const [vLabel,     setVLabel]     = useState("Color");
@@ -160,22 +166,22 @@ export default function AdminProducts() {
   const [ciOptions,     setCiOptions]     = useState("");
 
   // Which section's "Add" was clicked — determines dialog mode
-  const [dialogSection, setDialogSection] = useState<"tees-tanks" | "accessories">("tees-tanks");
+  const [dialogSection, setDialogSection] = useState<"tees-tanks" | "limited" | "accessories">("tees-tanks");
 
   const openNew = (section: "tees-tanks" | "accessories") => {
     setDialogSection(section);
     setEditProduct({
       ...emptyProduct,
-      category: section === "accessories" ? "Accessories" : "Tees & Tank Tops",
+      category: section === "accessories" ? "Accessories" : section === "limited" ? "Limited Edition" : "Tees & Tank Tops",
       display_order: products.length + 1,
     });
     setOpen(true);
   };
 
   const openEdit = (p: any) => {
-    const section = p.category === "Accessories" ? "accessories" : "tees-tanks";
+    const section = p.category === "Accessories" ? "accessories" : p.category === "Limited Edition" ? "limited" : "tees-tanks";
     setDialogSection(section);
-    setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], custom_inputs: p.custom_inputs || [] });
+    setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], custom_inputs: p.custom_inputs || [], size_guide_tee: p.size_guide_tee || "/images/size-guide-tees.png", size_guide_tank: p.size_guide_tank || "/images/size-guide-tanks.jpg", tee_description: p.tee_description || "", tank_description: p.tank_description || "" });
     setOpen(true);
   };
 
@@ -233,6 +239,31 @@ export default function AdminProducts() {
     finally { setUploadingExtra(false); }
   };
 
+
+  const handleSizeGuideTeeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSgTee(true);
+    try {
+      const url = await uploadFile(file, "products");
+      setEditProduct((prev: any) => ({ ...prev, size_guide_tee: url }));
+      toast.success("Tee size guide uploaded");
+    } catch (err: any) { toast.error(err.message); }
+    finally { setUploadingSgTee(false); }
+  };
+
+  const handleSizeGuideTankUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSgTank(true);
+    try {
+      const url = await uploadFile(file, "products");
+      setEditProduct((prev: any) => ({ ...prev, size_guide_tank: url }));
+      toast.success("Tank size guide uploaded");
+    } catch (err: any) { toast.error(err.message); }
+    finally { setUploadingSgTank(false); }
+  };
+
   const removeImage = (idx: number) => {
     setEditProduct((prev: any) => {
       const imgs = prev.images.filter((_: string, i: number) => i !== idx);
@@ -283,6 +314,7 @@ export default function AdminProducts() {
 
   // ── Categorise ──
   const teesAndTanks = products.filter((p: any) => p.category === "Tees & Tank Tops");
+  const limitedEdition = products.filter((p: any) => p.category === "Limited Edition");
   const accessories  = products.filter((p: any) => p.category === "Accessories");
 
   if (isLoading) return <div className="font-serif text-muted-foreground p-8">Loading products...</div>;
@@ -339,6 +371,32 @@ export default function AdminProducts() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {accessories.map((p: any) => (
+              <ProductCard key={p.id} p={p} onEdit={openEdit} onDelete={setDeleteId} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-border" />
+
+      {/* ── Limited Edition section ── */}
+      <div className="scroll-mt-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="font-serif text-xl font-black text-foreground">✨ Limited Edition</h2>
+            <span className="font-serif text-xs px-2.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+              {limitedEdition.length}
+            </span>
+          </div>
+          <Button onClick={() => openNew("limited")} size="sm" className="font-serif gap-2">
+            <Plus className="h-4 w-4" /> Add Limited
+          </Button>
+        </div>
+        {limitedEdition.length === 0 ? (
+          <p className="font-serif text-sm text-muted-foreground py-4">No limited edition items yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {limitedEdition.map((p: any) => (
               <ProductCard key={p.id} p={p} onEdit={openEdit} onDelete={setDeleteId} />
             ))}
           </div>
@@ -407,10 +465,24 @@ export default function AdminProducts() {
               </div>
 
               {/* Description */}
-              <div className="space-y-1">
-                <Label className="font-serif text-xs">Description</Label>
-                <Textarea value={editProduct.description} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} className="font-serif text-sm" rows={3} />
-              </div>
+              {(dialogSection === "tees-tanks" || dialogSection === "limited") ? (
+                <div className="space-y-3">
+                  <SectionLabel>Descriptions</SectionLabel>
+                  <div className="space-y-1">
+                    <Label className="font-serif text-xs">👕 Tee Description</Label>
+                    <Textarea value={editProduct.tee_description || ""} onChange={(e) => setEditProduct({ ...editProduct, tee_description: e.target.value })} className="font-serif text-sm" rows={2} placeholder="Description shown when customer selects Tee…" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-serif text-xs">🎽 Tank Description</Label>
+                    <Textarea value={editProduct.tank_description || ""} onChange={(e) => setEditProduct({ ...editProduct, tank_description: e.target.value })} className="font-serif text-sm" rows={2} placeholder="Description shown when customer selects Tank…" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="font-serif text-xs">Description</Label>
+                  <Textarea value={editProduct.description} onChange={(e) => setEditProduct({ ...editProduct, description: e.target.value })} className="font-serif text-sm" rows={3} />
+                </div>
+              )}
 
               {/* Stock status */}
               <div className="space-y-1">
@@ -457,6 +529,41 @@ export default function AdminProducts() {
                 </div>
               )}
 
+              {/* ── LIMITED EDITION: Available As (tee / tank / both) ── */}
+              {dialogSection === "limited" && (
+                <div className="space-y-2">
+                  <SectionLabel>Available As</SectionLabel>
+                  <div className="flex gap-3">
+                    {(["tee", "tank"] as const).map((type) => {
+                      const isActive = (editProduct.available_as || []).includes(type);
+                      return (
+                        <button
+                          key={type}
+                          onClick={() => setEditProduct((prev: any) => ({
+                            ...prev,
+                            available_as: toggleArr(prev.available_as || [], type),
+                          }))}
+                          className={`font-serif text-xs px-4 py-2 rounded-xl border-2 transition-all capitalize flex items-center gap-2 ${
+                            isActive
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                              : "bg-secondary/40 text-muted-foreground border-border hover:border-primary/50"
+                          }`}
+                        >
+                          <span>{type === "tee" ? "👕" : "🎽"}</span>
+                          {type}
+                          {isActive && <span className="text-[9px] opacity-70">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(editProduct.available_as || []).length === 0 && (
+                    <p className="font-serif text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      ⚠️ Select at least one — if none selected, both will show by default.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* ── ACCESSORIES: quick style presets ── */}
               {dialogSection === "accessories" && (
                 <div className="space-y-2">
@@ -476,6 +583,41 @@ export default function AdminProducts() {
                 </div>
               )}
 
+
+              {/* ── SIZE GUIDE IMAGES (tees-tanks + limited) ── */}
+              {(dialogSection === "tees-tanks" || dialogSection === "limited") && (
+                <div className="space-y-3">
+                  <SectionLabel>Size Guide Images <span className="normal-case font-normal text-[10px]">— shown in product page accordion</span></SectionLabel>
+
+                  {/* Tee Size Guide */}
+                  <div className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
+                    <p className="font-serif text-[11px] font-bold text-muted-foreground">👕 Tee Size Guide</p>
+                    {editProduct.size_guide_tee && (
+                      <div className="relative w-full max-w-[160px] rounded-lg overflow-hidden border border-border group">
+                        <img src={editProduct.size_guide_tee} alt="Tee size guide" className="w-full h-auto object-cover" />
+                        <button onClick={() => setEditProduct((prev: any) => ({ ...prev, size_guide_tee: "" }))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer text-[9px] font-bold">✕</button>
+                      </div>
+                    )}
+                    <Input type="file" accept="image/*" onChange={handleSizeGuideTeeUpload} disabled={uploadingSgTee} className="font-serif text-xs" />
+                    <Input value={editProduct.size_guide_tee || ""} onChange={(e) => setEditProduct({ ...editProduct, size_guide_tee: e.target.value })} placeholder="Or paste URL — default: /images/size-guide-tees.png" className="font-serif text-xs" />
+                  </div>
+
+                  {/* Tank Size Guide */}
+                  <div className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
+                    <p className="font-serif text-[11px] font-bold text-muted-foreground">🎽 Tank Size Guide</p>
+                    {editProduct.size_guide_tank && (
+                      <div className="relative w-full max-w-[160px] rounded-lg overflow-hidden border border-border group">
+                        <img src={editProduct.size_guide_tank} alt="Tank size guide" className="w-full h-auto object-cover" />
+                        <button onClick={() => setEditProduct((prev: any) => ({ ...prev, size_guide_tank: "" }))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer text-[9px] font-bold">✕</button>
+                      </div>
+                    )}
+                    <Input type="file" accept="image/*" onChange={handleSizeGuideTankUpload} disabled={uploadingSgTank} className="font-serif text-xs" />
+                    <Input value={editProduct.size_guide_tank || ""} onChange={(e) => setEditProduct({ ...editProduct, size_guide_tank: e.target.value })} placeholder="Or paste URL — default: /images/size-guide-tanks.jpg" className="font-serif text-xs" />
+                  </div>
+                </div>
+              )}
               {/* ── VARIANT OPTIONS ── */}
               <div className="space-y-2">
                 <SectionLabel>
