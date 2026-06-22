@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
+import { getAccessoryVariantStock, getProductTotalStock, LOW_STOCK_THRESHOLD } from "@/lib/inventory";
 
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -18,11 +19,15 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   </div>
 );
 
-const QuantityStepper = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
+const QuantityStepper = ({ value, onChange, max }: { value: number; onChange: (v: number) => void; max?: number }) => (
   <div className="flex items-center gap-3 border-2 border-border rounded-full px-4 py-2 w-fit">
     <button onClick={() => onChange(Math.max(1, value - 1))} className="bg-transparent border-none cursor-pointer text-foreground font-serif text-lg font-bold w-5 h-5 flex items-center justify-center">−</button>
     <span className="font-serif text-sm font-bold text-foreground w-4 text-center">{value}</span>
-    <button onClick={() => onChange(value + 1)} className="bg-transparent border-none cursor-pointer text-foreground font-serif text-lg font-bold w-5 h-5 flex items-center justify-center">+</button>
+    <button
+      onClick={() => { if (max === undefined || value < max) onChange(value + 1); }}
+      disabled={max !== undefined && value >= max}
+      style={{ opacity: max !== undefined && value >= max ? 0.4 : 1, cursor: max !== undefined && value >= max ? "not-allowed" : "pointer" }}
+      className="bg-transparent border-none text-foreground font-serif text-lg font-bold w-5 h-5 flex items-center justify-center">+</button>
   </div>
 );
 
@@ -41,7 +46,7 @@ const AccessoryDetail = () => {
 
   const rawProduct = dbProduct;
 
-  const { addToCart } = useCart();
+  const { addToCart, items: cartItems } = useCart();
   const { region, formatPrice } = useRegion();
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
@@ -51,6 +56,10 @@ const AccessoryDetail = () => {
   // validation
   const [shakeVariant, setShakeVariant] = useState(false);
   const [variantError, setVariantError] = useState(false);
+
+  useEffect(() => {
+    setQty(1);
+  }, [selectedVariant, selectedMulti.length]);
 
   if (isLoading) {
     return (
@@ -125,8 +134,42 @@ const AccessoryDetail = () => {
       }, 0) * qty
     : 0;
 
-  const isLowStock = (rawProduct as any).stock_status === "low_stock";
-  const isOOS = (rawProduct as any).stock_status === "out_of_stock" || (rawProduct as any).stock_status === "Out of Stock";
+  const productIdForCart = (rawProduct as any)?.id ?? (typeof product.id === "number" ? product.id : 9001);
+
+  const inCartQty = (variantName: string): number =>
+    cartItems
+      .filter((i) => i.productId === productIdForCart && i.style === "accessory" && i.size === variantName)
+      .reduce((sum, i) => sum + i.quantity, 0);
+
+  // Per-variant stock (e.g. colour/style), isolated per option — falls back
+  // to the flat total when this accessory has no variant-level tracking.
+  const getVariantStock = (variantName: string): number => getAccessoryVariantStock(rawProduct, variantName);
+  const remainingForVariant = (variantName: string): number => {
+    const raw = getVariantStock(variantName);
+    return raw === Infinity ? Infinity : Math.max(0, raw - inCartQty(variantName));
+  };
+
+  const totalRemaining = (() => {
+    const raw = getProductTotalStock(rawProduct);
+    return raw === Infinity ? Infinity : Math.max(0, raw - inCartQty("One Size"));
+  })();
+
+  // What's actually selectable right now, for low-stock / OOS messaging
+  const selectionRemaining = isMultiSelect
+    ? (selectedMulti.length > 0 ? Math.min(...selectedMulti.map(remainingForVariant)) : Infinity)
+    : hasVariants
+      ? (selectedVariant ? remainingForVariant(selectedVariant) : Infinity)
+      : totalRemaining;
+
+  const allVariantsOOS = hasVariants && groupKeys.length > 0 &&
+    Object.values(variantGroups).flat().every((v) => getVariantStock(v.name) <= 0);
+
+  const isLowStock = selectionRemaining !== Infinity && selectionRemaining > 0 && selectionRemaining <= LOW_STOCK_THRESHOLD;
+  const isOOS =
+    (rawProduct as any).stock_status === "out_of_stock" || (rawProduct as any).stock_status === "Out of Stock" ||
+    allVariantsOOS ||
+    (selectionRemaining !== Infinity && selectionRemaining <= 0) ||
+    (!hasVariants && totalRemaining !== Infinity && totalRemaining <= 0);
 
   const triggerShake = () => {
     setShakeVariant(true);
@@ -140,10 +183,20 @@ const AccessoryDetail = () => {
         triggerShake();
         return;
       }
+      const oosPicked = selectedMulti.filter((v) => remainingForVariant(v) <= 0);
+      if (oosPicked.length > 0) {
+        toast({ title: `${oosPicked.join(", ")} ${oosPicked.length > 1 ? "are" : "is"} out of stock`, variant: "destructive" });
+        return;
+      }
+      const shortQty = selectedMulti.find((v) => remainingForVariant(v) < qty);
+      if (shortQty) {
+        toast({ title: `Only ${remainingForVariant(shortQty)} of "${shortQty}" available`, variant: "destructive" });
+        return;
+      }
       selectedMulti.forEach((variantName) => {
         for (let i = 0; i < qty; i++) {
           addToCart({
-            productId: typeof product.id === "number" ? product.id : 9001,
+            productId: productIdForCart,
             name: product.name,
             image: allImages[0] || product.image,
             price: basePrice + (product.variants.find((v: any) => v.name === variantName)?.price_diff || 0),
@@ -160,9 +213,18 @@ const AccessoryDetail = () => {
         triggerShake();
         return;
       }
+      const remaining = remainingForVariant(selectedVariant);
+      if (remaining <= 0) {
+        toast({ title: `${selectedVariant} is out of stock`, variant: "destructive" });
+        return;
+      }
+      if (qty > remaining) {
+        toast({ title: `Only ${remaining} of "${selectedVariant}" available`, variant: "destructive" });
+        return;
+      }
       for (let i = 0; i < qty; i++) {
         addToCart({
-          productId: typeof product.id === "number" ? product.id : 9001,
+          productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
           price: singleTotal / qty,
@@ -173,9 +235,17 @@ const AccessoryDetail = () => {
       }
       toast({ title: `${product.name} (${selectedVariant}) added to cart!` });
     } else {
+      if (totalRemaining !== Infinity && totalRemaining <= 0) {
+        toast({ title: `${product.name} is out of stock`, variant: "destructive" });
+        return;
+      }
+      if (totalRemaining !== Infinity && qty > totalRemaining) {
+        toast({ title: `Only ${totalRemaining} available`, variant: "destructive" });
+        return;
+      }
       for (let i = 0; i < qty; i++) {
         addToCart({
-          productId: typeof product.id === "number" ? product.id : 9001,
+          productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
           price: basePrice,
@@ -308,20 +378,40 @@ const AccessoryDetail = () => {
               >
                 {variantGroups[label].map((v) => {
                   const isActive = isMultiSelect ? selectedMulti.includes(v.name) : selectedVariant === v.name;
+                  const vStock = getVariantStock(v.name);
+                  const vOut = vStock !== Infinity && vStock <= 0;
+                  const vLow = vStock !== Infinity && vStock > 0 && vStock <= LOW_STOCK_THRESHOLD;
                   return (
-                    <button key={v.name}
-                      onClick={() => {
-                        isMultiSelect ? toggleMulti(v.name) : setSelectedVariant(v.name);
-                        setVariantError(false);
-                      }}
-                      className="px-5 py-2 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
-                      style={{
-                        borderColor: isActive ? "hsl(var(--primary))" : "hsl(var(--border))",
-                        backgroundColor: isActive ? "hsl(var(--primary))" : "transparent",
-                        color: isActive ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
-                      }}>
-                      {v.name}{v.price_diff > 0 ? ` +${v.price_diff}` : v.price_diff < 0 ? ` ${v.price_diff}` : ""}
-                    </button>
+                    <div key={v.name} className="flex flex-col items-center gap-1">
+                      <button
+                        onClick={() => {
+                          if (vOut) return;
+                          isMultiSelect ? toggleMulti(v.name) : setSelectedVariant(v.name);
+                          setVariantError(false);
+                        }}
+                        disabled={vOut}
+                        className="px-5 py-2 rounded-full font-serif text-sm font-bold transition-all duration-200 border-2"
+                        style={{
+                          cursor: vOut ? "not-allowed" : "pointer",
+                          borderColor: isActive && !vOut ? "hsl(var(--primary))" : "hsl(var(--border))",
+                          backgroundColor: isActive && !vOut ? "hsl(var(--primary))" : "transparent",
+                          color: vOut ? "hsl(var(--muted-foreground))" : isActive ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+                          opacity: vOut ? 0.45 : 1,
+                          textDecoration: vOut ? "line-through" : "none",
+                        }}>
+                        {v.name}{v.price_diff > 0 ? ` +${v.price_diff}` : v.price_diff < 0 ? ` ${v.price_diff}` : ""}
+                      </button>
+                      {vLow && (
+                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "#B45309" }}>
+                          {vStock} left
+                        </span>
+                      )}
+                      {vOut && (
+                        <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "hsl(var(--muted-foreground))" }}>
+                          Sold out
+                        </span>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -333,10 +423,19 @@ const AccessoryDetail = () => {
             </div>
           ))}
 
+          {/* Stock status */}
+          {isLowStock && !isOOS && (
+            <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 14px", marginBottom: 12 }}>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700, color: "#92400e", margin: 0 }}>
+                ⚠ Only {selectionRemaining} left — order soon!
+              </p>
+            </div>
+          )}
+
           {/* Quantity */}
           <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Quantity</p>
           <div className="mb-10">
-            <QuantityStepper value={qty} onChange={setQty} />
+            <QuantityStepper value={qty} onChange={setQty} max={selectionRemaining === Infinity ? undefined : selectionRemaining} />
           </div>
 
           {/* Add to cart */}

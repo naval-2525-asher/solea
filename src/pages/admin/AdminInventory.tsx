@@ -4,20 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Save, AlertTriangle, CheckCircle, XCircle, ChevronDown, AlertCircle } from "lucide-react";
 import { useLocation } from "react-router-dom";
-
-const TEE_SIZES  = ["S", "M", "L", "XL"];
-const TANK_SIZES = ["S", "M", "L"];
+import { TEE_SIZES, TANK_SIZES, LOW_STOCK_THRESHOLD, parseStockMap, recomputeTotals } from "@/lib/inventory";
 
 const stockStatusInfo = (status: string, count: number) => {
   if (status === "out_of_stock" || count === 0)
     return { label: "Out of Stock", color: "#dc2626", bg: "#fee2e2", icon: XCircle };
-  if (status === "low_stock" || count <= 5)
+  if (status === "low_stock" || count <= LOW_STOCK_THRESHOLD)
     return { label: "Low Stock",    color: "#d97706", bg: "#fef3c7", icon: AlertTriangle };
   return   { label: "In Stock",     color: "#16a34a", bg: "#dcfce7", icon: CheckCircle };
 };
 
 const autoStatus = (count: number) =>
-  count === 0 ? "out_of_stock" : count <= 5 ? "low_stock" : "in_stock";
+  count === 0 ? "out_of_stock" : count <= LOW_STOCK_THRESHOLD ? "low_stock" : "in_stock";
 
 // A product can be tee, tank, or both
 const getTypes = (product: any): { isTee: boolean; isTank: boolean } => {
@@ -40,9 +38,12 @@ const getColorsFromVariants = (product: any): string[] => {
     .filter(Boolean);
 };
 
+// Tee and Tank stock are tracked as two completely separate pools per size —
+// "Tee S" and "Tank S" must never share a number.
 type EditRow = {
   stock_count:  number;
-  size_stock:   Record<string, number>;
+  tee_stock:    Record<string, number>;
+  tank_stock:   Record<string, number>;
   color_stock:  Record<string, number>;
   stock_status: string;
 };
@@ -61,7 +62,11 @@ function SizeInputs({ sizes, sizeStock, onChange }: {
 }) {
   return (
     <div style={{ display: "flex", gap: 6 }}>
-      {sizes.map((size) => (
+      {sizes.map((size) => {
+        const val = sizeStock[size] ?? 0;
+        const isOut = val === 0;
+        const isLow = val > 0 && val <= LOW_STOCK_THRESHOLD;
+        return (
         <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
           <span style={{ fontFamily: "Georgia, serif", fontSize: "0.6rem", fontWeight: 700, color: "hsl(var(--muted-foreground))" }}>
             {size}
@@ -70,18 +75,25 @@ function SizeInputs({ sizes, sizeStock, onChange }: {
             type="number" min={0}
             value={sizeStock[size] ?? 0}
             onChange={(e) => onChange(size, Number(e.target.value))}
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              borderColor: isOut ? "#dc2626" : isLow ? "#d97706" : "hsl(var(--border))",
+              color: isOut ? "#dc2626" : isLow ? "#d97706" : "hsl(var(--foreground))",
+            }}
           />
+          {isOut && <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "#dc2626" }}>out</span>}
+          {isLow && <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "#d97706" }}>{val} left</span>}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-function SectionDropdown({ title, count, sectionRef, children }: {
-  title: string; count: number; sectionRef?: React.RefObject<HTMLDivElement>; children: React.ReactNode;
+function SectionDropdown({ title, count, sectionRef, defaultOpen = true, children }: {
+  title: string; count?: number; sectionRef?: React.RefObject<HTMLDivElement>; defaultOpen?: boolean; children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div ref={sectionRef} className="scroll-mt-6 bg-card border border-border rounded-xl overflow-hidden">
       <button
@@ -90,9 +102,11 @@ function SectionDropdown({ title, count, sectionRef, children }: {
       >
         <div className="flex items-center gap-3">
           <span className="font-serif text-base font-black text-foreground">{title}</span>
-          <span className="font-serif text-xs px-2.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
-            {count} product{count !== 1 ? "s" : ""}
-          </span>
+          {count !== undefined && (
+            <span className="font-serif text-xs px-2.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+              {count} product{count !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
         <ChevronDown size={16} className="text-muted-foreground transition-transform duration-200"
           style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
@@ -123,30 +137,30 @@ export default function AdminInventory() {
   // Init edits — detect if DB columns are missing
   useEffect(() => {
     if (products.length === 0) return;
-    const firstProduct = products[0] as any;
     // If stock_count is undefined on every product, the column likely doesn't exist yet
     const columnsMissing = products.every((p: any) =>
-      p.stock_count === undefined && p.size_stock === undefined && p.color_stock === undefined
+      p.stock_count === undefined && p.tee_variants === undefined && p.tank_variants === undefined && p.color_stock === undefined
     );
     setMissingCols(columnsMissing);
 
     const init: Record<string, EditRow> = {};
     products.forEach((p: any) => {
-      // Pre-populate size_stock from existing sizes array if size_stock is empty
-      const existingSizeStock: Record<string, number> = p.size_stock ?? {};
-      const existingColorStock: Record<string, number> = p.color_stock ?? {};
-
-      // If size_stock is empty but sizes exist, init all sizes to 0
       const { isTee, isTank } = getTypes(p);
-      const applicableSizes = [
-        ...(isTee  ? TEE_SIZES  : []),
-        ...(isTank ? TANK_SIZES : []),
-      ];
-      // deduplicate
-      const uniqueSizes = Array.from(new Set(applicableSizes));
-      uniqueSizes.forEach((s) => {
-        if (existingSizeStock[s] === undefined) existingSizeStock[s] = 0;
-      });
+
+      // Tee and Tank stock are separate pools. If a product was saved before
+      // per-style tracking existed, it only has the old shared `size_stock`
+      // map — seed both pools from it once so nothing looks falsely empty;
+      // saving afterwards splits them into real, independent numbers.
+      const legacy = parseStockMap(p.size_stock);
+      const ownTee = parseStockMap(p.tee_variants);
+      const ownTank = parseStockMap(p.tank_variants);
+
+      const existingTeeStock: Record<string, number> = Object.keys(ownTee).length > 0 ? ownTee : { ...legacy };
+      const existingTankStock: Record<string, number> = Object.keys(ownTank).length > 0 ? ownTank : { ...legacy };
+      const existingColorStock: Record<string, number> = parseStockMap(p.color_stock);
+
+      if (isTee) TEE_SIZES.forEach((s) => { if (existingTeeStock[s] === undefined) existingTeeStock[s] = 0; });
+      if (isTank) TANK_SIZES.forEach((s) => { if (existingTankStock[s] === undefined) existingTankStock[s] = 0; });
 
       // Pre-populate color_stock from variants if empty
       const colors = getColorsFromVariants(p);
@@ -156,7 +170,8 @@ export default function AdminInventory() {
 
       init[p.id] = {
         stock_count:  p.stock_count  ?? 0,
-        size_stock:   existingSizeStock,
+        tee_stock:    existingTeeStock,
+        tank_stock:   existingTankStock,
         color_stock:  existingColorStock,
         stock_status: p.stock_status ?? "in_stock",
       };
@@ -171,11 +186,18 @@ export default function AdminInventory() {
     }));
   };
 
-  const updateSizeStock = (id: string, size: string, value: number) => {
+  // Updates ONLY the given style's pool for that size — Tee S and Tank S
+  // are always independent numbers, never combined.
+  const updateSizeStock = (id: string, style: "tee" | "tank", size: string, value: number) => {
     setEdits((prev) => {
-      const sizeStock = { ...prev[id].size_stock, [size]: value };
-      const total     = Object.values(sizeStock).reduce((a, b) => a + b, 0);
-      return { ...prev, [id]: { ...prev[id], size_stock: sizeStock, stock_count: total, stock_status: autoStatus(total) } };
+      const row = prev[id];
+      const teeStock  = style === "tee"  ? { ...row.tee_stock,  [size]: value } : row.tee_stock;
+      const tankStock = style === "tank" ? { ...row.tank_stock, [size]: value } : row.tank_stock;
+      const total = recomputeTotals({ teeStock, tankStock, hasSizeTracking: true }).stock_count;
+      return {
+        ...prev,
+        [id]: { ...row, tee_stock: teeStock, tank_stock: tankStock, stock_count: total, stock_status: autoStatus(total) },
+      };
     });
   };
 
@@ -197,14 +219,15 @@ export default function AdminInventory() {
       const { error } = await supabase
         .from("products")
         .update({
-          stock_count:  row.stock_count,
-          size_stock:   row.size_stock,
-          color_stock:  row.color_stock,
-          stock_status: row.stock_status,
+          stock_count:   row.stock_count,
+          tee_variants:  row.tee_stock,
+          tank_variants: row.tank_stock,
+          color_stock:   row.color_stock,
+          stock_status:  row.stock_status,
         } as any)
         .eq("id", id);
       if (error) throw error;
-      toast.success("Saved!");
+      toast.success("Saved! Storefront will update in real time.");
       refetch();
     } catch (e: any) {
       toast.error(e.message);
@@ -255,35 +278,36 @@ export default function AdminInventory() {
           </div>
         </td>
 
-        {/* Total stock */}
+        {/* Total stock — auto-computed as Tee pool + Tank pool */}
         <td className="p-4 align-middle">
           <input type="number" min={0}
             value={edit.stock_count}
-            onChange={(e) => updateTotalStock(product.id, Number(e.target.value))}
-            style={{ ...inputStyle, width: 70 }}
+            readOnly
+            title="Auto-computed from Tee + Tank sizes below"
+            style={{ ...inputStyle, width: 70, opacity: 0.6, cursor: "not-allowed" }}
           />
         </td>
 
-        {/* Tank sizes S·M·L */}
+        {/* Tank sizes S·M·L — own pool, independent of Tee sizes */}
         <td className="p-4 align-middle">
           {isTank ? (
             <SizeInputs
               sizes={TANK_SIZES}
-              sizeStock={edit.size_stock}
-              onChange={(size, val) => updateSizeStock(product.id, size, val)}
+              sizeStock={edit.tank_stock}
+              onChange={(size, val) => updateSizeStock(product.id, "tank", size, val)}
             />
           ) : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
           )}
         </td>
 
-        {/* Tee sizes S·M·L·XL */}
+        {/* Tee sizes S·M·L·XL — own pool, independent of Tank sizes */}
         <td className="p-4 align-middle">
           {isTee ? (
             <SizeInputs
               sizes={TEE_SIZES}
-              sizeStock={edit.size_stock}
-              onChange={(size, val) => updateSizeStock(product.id, size, val)}
+              sizeStock={edit.tee_stock}
+              onChange={(size, val) => updateSizeStock(product.id, "tee", size, val)}
             />
           ) : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
@@ -417,12 +441,8 @@ export default function AdminInventory() {
           <div className="space-y-1">
             <p className="font-serif text-sm font-bold text-amber-800">Supabase columns missing — saving won't work yet</p>
             <p className="font-serif text-xs text-amber-700">
-              Run this SQL in your Supabase dashboard → SQL Editor to add the required columns:
+              Run the setup SQL below in your Supabase dashboard → SQL Editor to add the required columns.
             </p>
-            <pre className="font-mono text-[11px] bg-amber-100 text-amber-900 rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap mt-1">{`ALTER TABLE products
-  ADD COLUMN IF NOT EXISTS stock_count integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS size_stock  jsonb    DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS color_stock jsonb    DEFAULT '{}';`}</pre>
           </div>
         </div>
       )}

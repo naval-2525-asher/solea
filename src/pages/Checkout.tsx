@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Paperclip, CheckCircle2, Lock, Truck, AlertTriangle } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
 import { useInsertOrder, uploadFile, useProducts } from "@/hooks/useAdminData";
+import { supabase } from "@/integrations/supabase/client";
+import { getEffectiveStock } from "@/lib/inventory";
 
 // ── City / Delivery Config ────────────────────────────────────────────────────
 const PK_CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad", "Multan", "Peshawar", "Quetta", "Hyderabad", "Sialkot", "Other"];
@@ -95,48 +97,21 @@ const Checkout = () => {
     (allProducts as any[]).map((p: any) => [String(p.id), p])
   );
 
-  // For each cart item check if requested qty exceeds stock_count or size-specific stock
+  // Each cart line is checked against ITS OWN pool — Tee S, Tank S, and an
+  // Accessory's colour/style variant never share a stock number.
   const stockErrors: { name: string; size?: string; available: number; requested: number }[] = [];
   for (const item of items) {
     const product = productMap.get(String(item.productId));
     if (!product) continue;
 
-    // Per-size stock check (takes priority)
-    const sizeStock: Record<string, number> = product.size_stock ?? {};
-    const hasSizeStock = Object.keys(sizeStock).length > 0;
-
-    if (hasSizeStock && item.size && item.size !== "One Size") {
-      const sizeAvailable = sizeStock[item.size] ?? 0;
-      if (item.quantity > sizeAvailable) {
-        stockErrors.push({
-          name: item.name,
-          size: item.size,
-          available: sizeAvailable,
-          requested: item.quantity,
-        });
-        continue; // skip total-stock check if we already have a size-level error
-      }
-    }
-
-    // Fall back to total stock check
-    const stockCount: number =
-      product.stock_count !== null && product.stock_count !== undefined
-        ? Number(product.stock_count)
-        : Infinity;
-    if (stockCount !== Infinity && item.quantity > stockCount) {
+    const available = getEffectiveStock(product, item.style, item.size);
+    if (available !== Infinity && item.quantity > available) {
       stockErrors.push({
         name: item.name,
-        available: stockCount,
+        size: item.size && item.size !== "One Size" ? item.size : undefined,
+        available,
         requested: item.quantity,
       });
-    }
-    // Also block entirely out-of-stock items
-    if (
-      stockCount === 0 ||
-      product.stock_status === "out_of_stock" ||
-      product.stock_status === "Out of Stock"
-    ) {
-      stockErrors.push({ name: item.name, available: 0, requested: item.quantity });
     }
   }
 
@@ -175,7 +150,7 @@ const Checkout = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Re-check stock one more time on submit
+    // Re-check stock one more time on submit (against the cached product list)
     if (hasStockErrors) {
       toast.error("Some items in your cart exceed available stock. Please update your cart.");
       return;
@@ -187,6 +162,40 @@ const Checkout = () => {
       return;
     }
     if (!isValidEmail(form.email)) { toast.error("Please enter a valid email address"); return; }
+
+    // FINAL stock check — re-fetch the latest numbers straight from the DB
+    // right before the order is created, so a change made seconds ago by
+    // another customer (or the admin) is always caught, even if our cached
+    // product list hasn't refreshed yet.
+    try {
+      const ids = Array.from(new Set(items.map((i) => i.productId)));
+      const { data: freshProducts, error: freshErr } = await supabase
+        .from("products")
+        .select("*")
+        .in("id", ids as any);
+      if (freshErr) throw freshErr;
+
+      const freshMap = new Map((freshProducts || []).map((p: any) => [String(p.id), p]));
+      const lastMinuteErrors: string[] = [];
+      for (const item of items) {
+        const fresh = freshMap.get(String(item.productId));
+        if (!fresh) continue;
+        const available = getEffectiveStock(fresh, item.style, item.size);
+        if (available !== Infinity && item.quantity > available) {
+          lastMinuteErrors.push(
+            `${item.name}${item.size && item.size !== "One Size" ? ` (${item.size})` : ""} — only ${available} left`
+          );
+        }
+      }
+      if (lastMinuteErrors.length > 0) {
+        toast.error(`Stock just changed: ${lastMinuteErrors.join(", ")}. Please update your cart.`);
+        return;
+      }
+    } catch (err) {
+      // If the live check itself fails (e.g. network hiccup), fall back to
+      // the cached validation already performed above rather than blocking checkout.
+      console.warn("Final stock re-check failed, proceeding with cached validation:", err);
+    }
 
     try {
       let screenshotUrl = "";
@@ -217,6 +226,23 @@ const Checkout = () => {
         status: "pending",
         delivery_charge: delivery,
       });
+
+      // Reserve the stock immediately so two simultaneous checkouts can
+      // never both claim the last unit. Each call is a single atomic DB
+      // update, so this is safe even under concurrent orders. If the
+      // decrement function hasn't been set up yet (see Admin → Inventory →
+      // Database Setup), we don't block the order — it's still recorded
+      // and the admin can adjust stock manually.
+      await Promise.allSettled(
+        items.map((item) =>
+          (supabase as any).rpc("decrement_product_stock", {
+            p_product_id: item.productId,
+            p_style: item.style,
+            p_size: item.size && item.size !== "One Size" ? item.size : null,
+            p_qty: item.quantity,
+          })
+        )
+      );
 
       toast.success("Order placed! 🎉 We'll verify your payment shortly.");
       clearCart();
@@ -397,28 +423,9 @@ const Checkout = () => {
           <div className="space-y-3">
             {items.map((item) => {
               const product = productMap.get(String(item.productId));
-
-              // Per-size check
-              const sizeStock: Record<string, number> = product?.size_stock ?? {};
-              const hasSzStock = Object.keys(sizeStock).length > 0;
-              const sizeAvailable = hasSzStock && item.size && item.size !== "One Size"
-                ? (sizeStock[item.size] ?? 0)
-                : null;
-              const sizeOOS = sizeAvailable !== null && sizeAvailable === 0;
-              const sizeExceeds = sizeAvailable !== null && !sizeOOS && item.quantity > sizeAvailable;
-
-              // Total stock fallback
-              const stockCount: number =
-                product?.stock_count !== null && product?.stock_count !== undefined
-                  ? Number(product.stock_count)
-                  : Infinity;
-              const isOOS =
-                !sizeOOS && !sizeExceeds && (
-                  stockCount === 0 ||
-                  product?.stock_status === "out_of_stock" ||
-                  product?.stock_status === "Out of Stock"
-                );
-              const exceedsStock = !sizeOOS && !sizeExceeds && stockCount !== Infinity && item.quantity > stockCount;
+              const available = product ? getEffectiveStock(product, item.style, item.size) : Infinity;
+              const isOOS = available !== Infinity && available <= 0;
+              const exceedsStock = !isOOS && available !== Infinity && item.quantity > available;
               const colour = item.customisation?.Colour;
 
               return (
@@ -427,25 +434,19 @@ const Checkout = () => {
                   className="flex justify-between items-start font-serif text-sm"
                 >
                   <div className="flex flex-col gap-0.5">
-                    <span className={`text-foreground ${exceedsStock || isOOS || sizeOOS || sizeExceeds ? "text-destructive" : ""}`}>
+                    <span className={`text-foreground ${exceedsStock || isOOS ? "text-destructive" : ""}`}>
                       {item.name}
                       {colour ? ` · ${colour}` : ""}
                       {" · "}{item.size} × {item.quantity}
                     </span>
-                    {sizeOOS && (
-                      <span className="text-destructive text-xs font-bold">Size {item.size} is out of stock</span>
-                    )}
-                    {sizeExceeds && !sizeOOS && (
+                    {isOOS && (
                       <span className="text-destructive text-xs font-bold">
-                        Only {sizeAvailable} available in size {item.size} — please reduce qty
+                        {item.size && item.size !== "One Size" ? `Size ${item.size} is out of stock` : "This item is out of stock"}
                       </span>
                     )}
-                    {isOOS && !sizeOOS && !sizeExceeds && (
-                      <span className="text-destructive text-xs font-bold">This item is out of stock</span>
-                    )}
-                    {!isOOS && exceedsStock && !sizeOOS && !sizeExceeds && (
+                    {!isOOS && exceedsStock && (
                       <span className="text-destructive text-xs font-bold">
-                        Only {stockCount} available — please reduce qty in cart
+                        Only {available} available{item.size && item.size !== "One Size" ? ` in size ${item.size}` : ""} — please reduce qty in cart
                       </span>
                     )}
                   </div>

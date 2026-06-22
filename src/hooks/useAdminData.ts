@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 // ─── Products ───
 export function useProducts() {
@@ -15,6 +16,32 @@ export function useProducts() {
       return data;
     },
   });
+}
+
+// Mount this ONCE near the app root. It listens for any insert/update/delete
+// on `products` (stock changes, new items, etc.) and invalidates the
+// `products` query cache so every page using useProducts() — product pages,
+// cart, checkout — reflects the change immediately, without a page refresh.
+// Requires `products` to be added to the `supabase_realtime` publication
+// (see the SQL setup snippet in Admin → Inventory).
+export function useRealtimeInventorySync() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel("products-inventory-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["products"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
 }
 
 export function useUpsertProduct() {

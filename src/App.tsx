@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { CartProvider } from "@/context/CartContext";
 import { RegionProvider } from "@/context/RegionContext";
+import { useRealtimeInventorySync } from "@/hooks/useAdminData";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
 import Bagcharms from "./pages/Bagcharms";
@@ -76,6 +77,13 @@ const ScrollManager = () => {
 
 const queryClient = new QueryClient();
 
+// Keeps every page's product/inventory data in sync the instant it changes
+// in the backend — no manual refresh needed on the storefront.
+const InventoryRealtimeSync = () => {
+  useRealtimeInventorySync();
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -83,6 +91,7 @@ const App = () => (
         <CartProvider>
           <Toaster />
           <Sonner />
+          <InventoryRealtimeSync />
           <BrowserRouter>
             <ScrollManager />
             <Routes>

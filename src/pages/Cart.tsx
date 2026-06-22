@@ -6,6 +6,7 @@ import { Minus, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
 import { useProducts } from "@/hooks/useAdminData";
 import { toast } from "sonner";
+import { getEffectiveStock, isProductManuallyOOS } from "@/lib/inventory";
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice } = useCart();
@@ -17,19 +18,20 @@ const Cart = () => {
     (products as any[]).map((p: any) => [String(p.id), p])
   );
 
-  // Get the effective stock for a cart item
-  const getStock = (productId: number | string): number => {
-    const p = productMap.get(String(productId));
+  // Effective stock for THIS exact cart line — Tee S, Tank S, and an
+  // Accessory's colour/style variant are each their own pool.
+  const getStock = (item: { productId: number | string; size: string; style: string }): number => {
+    const p = productMap.get(String(item.productId));
     if (!p) return Infinity;
-    const rawStock = (p as any)?.stock_count;
-    return rawStock !== null && rawStock !== undefined ? Number(rawStock) : Infinity;
+    return getEffectiveStock(p, item.style, item.size);
   };
 
-  const isOOS = (productId: number | string): boolean => {
-    const p = productMap.get(String(productId));
+  const isOOS = (item: { productId: number | string; size: string; style: string }): boolean => {
+    const p = productMap.get(String(item.productId));
     if (!p) return false;
-    const stock = getStock(productId);
-    return stock === 0 || p.stock_status === "out_of_stock" || p.stock_status === "Out of Stock";
+    if (isProductManuallyOOS(p)) return true;
+    const stock = getStock(item);
+    return stock !== Infinity && stock <= 0;
   };
 
   const formatCartPrice = (price: number) => {
@@ -41,8 +43,8 @@ const Cart = () => {
 
   // Check for any stock issues across cart
   const stockIssues = items.filter((item) => {
-    const stock = getStock(item.productId);
-    return isOOS(item.productId) || (stock !== Infinity && item.quantity > stock);
+    const stock = getStock(item);
+    return isOOS(item) || (stock !== Infinity && item.quantity > stock);
   });
 
   if (items.length === 0) {
@@ -80,11 +82,12 @@ const Cart = () => {
                   : `${stockIssues.length} items have stock issues:`}
               </p>
               {stockIssues.map((item) => {
-                const stock = getStock(item.productId);
-                const oos = isOOS(item.productId);
+                const stock = getStock(item);
+                const oos = isOOS(item);
                 return (
                   <p key={cartItemKey(item)} className="font-serif text-xs text-amber-800">
                     <strong>{item.name}</strong>{" "}
+                    {item.style !== "tee" || item.size !== "One Size" ? `(${item.size}) ` : ""}
                     {oos
                       ? "— out of stock"
                       : `— only ${stock} available, you have ${item.quantity} in cart`}
@@ -102,8 +105,8 @@ const Cart = () => {
           {items.map((item) => {
             const key = cartItemKey(item);
             const colour = item.customisation?.Colour;
-            const stock = getStock(item.productId);
-            const oos = isOOS(item.productId);
+            const stock = getStock(item);
+            const oos = isOOS(item);
             const exceedsStock = !oos && stock !== Infinity && item.quantity > stock;
 
             return (
