@@ -25,7 +25,7 @@ type CustomInput = {
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
     <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", maxWidth: "92vw", maxHeight: "92vh" }}>
-      <button onClick={onClose} style={{ position: "absolute", top: -14, right: -14, width: 32, height: 32, borderRadius: "50%", background: "#8B1A2F", color: "white", border: "none", cursor: "pointer", fontWeight: "bold", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>✕</button>
+      <button type="button" onClick={onClose} style={{ position: "absolute", top: -14, right: -14, width: 32, height: 32, borderRadius: "50%", background: "#8B1A2F", color: "white", border: "none", cursor: "pointer", fontWeight: "bold", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>✕</button>
       <img src={src} alt="Full size" style={{ maxWidth: "92vw", maxHeight: "92vh", borderRadius: 12, objectFit: "contain", display: "block" }} />
     </div>
   </div>
@@ -120,15 +120,28 @@ const ProductDetail = () => {
   const isLimited = dbProduct?.category === "Limited Edition";
   const hasSizes = isTeeProduct || isLimited;
 
-  const teeSizes = availableSizes;
+  const availableAs: string[] = (dbProduct as any)?.available_as || [];
+  const teeSizes  = availableSizes.filter((s: string) => s !== "XL" ? true : true); // all sizes including XL
   const tankSizes = availableSizes.filter((s: string) => s !== "XL");
-  const currentSizes = (isTeeProduct || isLimited) ? (selectedType === "tee" ? teeSizes : tankSizes) : availableSizes;
+
+  // For limited edition and tees-tanks: show sizes matching the selected style
+  // If available_as has only "tank", always show tank sizes regardless of selectedType
+  const effectiveType: "tee" | "tank" =
+    (isTeeProduct || isLimited)
+      ? (availableAs.includes("tank") && !availableAs.includes("tee") ? "tank"
+        : availableAs.includes("tee") && !availableAs.includes("tank") ? "tee"
+        : selectedType)
+      : selectedType;
+
+  const currentSizes = (isTeeProduct || isLimited)
+    ? (effectiveType === "tee" ? teeSizes : tankSizes)
+    : availableSizes;
 
   // Tee and Tank stock are tracked as separate pools per size — a Tee S and
   // a Tank S sale never touch the same number.
   const getSizeStock = (size: string): number => {
     if (!hasSizes) return stockCount;
-    return getStyleSizeStock(dbProduct, selectedType, size);
+    return getStyleSizeStock(dbProduct, effectiveType, size);
   };
 
   // Subtract what's already sitting in the cart so the customer can never
@@ -136,7 +149,7 @@ const ProductDetail = () => {
   const inCartQty = (size: string | null): number => {
     if (!size) return 0;
     return cartItems
-      .filter((i) => i.productId === (typeof product.id === "number" ? product.id : 9999) && i.size === size && i.style === (hasSizes ? selectedType : "tee"))
+      .filter((i) => i.productId === (typeof product.id === "number" ? product.id : 9999) && i.size === size && i.style === (hasSizes ? effectiveType : "tee"))
       .reduce((sum, i) => sum + i.quantity, 0);
   };
 
@@ -167,12 +180,12 @@ const ProductDetail = () => {
     return sp.image ? [sp.image] : [];
   })();
 
-  const sizeGuideImage = selectedType === "tee"
+  const sizeGuideImage = effectiveType === "tee"
     ? ((dbProduct as any)?.size_guide_tee || "/images/size-guide-tees.png")
     : ((dbProduct as any)?.size_guide_tank || "/images/size-guide-tanks.jpg");
 
-  const variants: VariantOption[] = (dbProduct as any)?.variants || (product as any).variants || [];
-  const customInputs: CustomInput[] = (dbProduct as any)?.custom_inputs || (product as any).custom_inputs || [];
+  const variants: VariantOption[] = ((dbProduct as any)?.variants || (product as any).variants || []).filter((v: any) => v && v.name);
+  const customInputs: CustomInput[] = ((dbProduct as any)?.custom_inputs || (product as any).custom_inputs || []).filter((ci: any) => ci && ci.id);
 
   const variantGroups: Record<string, VariantOption[]> = {};
   variants.forEach((v) => {
@@ -273,7 +286,7 @@ const ProductDetail = () => {
         image: allImages[0] || (product as any).image || "",
         price: regionPrice,
         size: selectedSize || "One Size",
-        style: hasSizes ? selectedType : "tee",
+        style: hasSizes ? effectiveType : "tee",
         customisation: Object.keys(customisation).length > 0 ? customisation : undefined,
       });
     }
@@ -312,7 +325,14 @@ const ProductDetail = () => {
       <Navbar />
 
       <div className="px-10 pt-6">
-        <Link to="/shop" className="text-foreground font-serif text-sm no-underline flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
+        <Link
+          to={
+            dbProduct?.category === "Limited Edition" ? "/limited-edition"
+            : dbProduct?.category === "Accessories"   ? "/accessories"
+            : "/shop"
+          }
+          className="text-foreground font-serif text-sm no-underline flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
+        >
           ← Back
         </Link>
       </div>
@@ -350,17 +370,17 @@ const ProductDetail = () => {
 
             {allImages.length > 1 && (
               <>
-                <button onClick={(e) => { e.stopPropagation(); setImgIndex((i) => (i - 1 + allImages.length) % allImages.length); }}
+                <button type="button" onClick={(e) => { e.stopPropagation(); setImgIndex((i) => (i - 1 + allImages.length) % allImages.length); }}
                   className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm border-none flex items-center justify-center cursor-pointer shadow-md hover:bg-white transition-colors">
                   <ChevronLeft size={18} className="text-foreground" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); setImgIndex((i) => (i + 1) % allImages.length); }}
+                <button type="button" onClick={(e) => { e.stopPropagation(); setImgIndex((i) => (i + 1) % allImages.length); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm border-none flex items-center justify-center cursor-pointer shadow-md hover:bg-white transition-colors">
                   <ChevronRight size={18} className="text-foreground" />
                 </button>
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                   {allImages.map((_, i) => (
-                    <button key={i} onClick={(e) => { e.stopPropagation(); setImgIndex(i); }}
+                    <button type="button" key={i} onClick={(e) => { e.stopPropagation(); setImgIndex(i); }}
                       className="border-none cursor-pointer rounded-full transition-all"
                       style={{ width: i === imgIndex ? 20 : 8, height: 8, backgroundColor: i === imgIndex ? "hsl(var(--primary))" : "rgba(255,255,255,0.7)" }} />
                   ))}
@@ -372,7 +392,7 @@ const ProductDetail = () => {
           {allImages.length > 1 && (
             <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
               {allImages.map((src, i) => (
-                <button key={i} onClick={() => setImgIndex(i)}
+                <button type="button" key={i} onClick={() => setImgIndex(i)}
                   className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer"
                   style={{ borderColor: i === imgIndex ? "hsl(var(--primary))" : "hsl(var(--border))" }}>
                   <img src={src} alt={`view ${i + 1}`} className="w-full h-full object-cover" />
@@ -422,7 +442,7 @@ const ProductDetail = () => {
                 <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Style</p>
                 <div className="flex gap-2 mb-8">
                   {(["tee", "tank"] as const).filter((t) => availableAs.length === 0 || availableAs.includes(t)).map((type) => (
-                    <button key={type} onClick={() => handleTypeChange(type)}
+                    <button type="button" key={type} onClick={() => handleTypeChange(type)}
                       className="px-6 py-2 rounded-full font-serif text-sm font-bold cursor-pointer transition-all duration-200 border-2"
                       style={{ borderColor: selectedType === type ? "hsl(var(--primary))" : "hsl(var(--border))", backgroundColor: selectedType === type ? "hsl(var(--primary))" : "transparent", color: selectedType === type ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
                       {type === "tee" ? "Tee" : "Tank"}
@@ -444,7 +464,7 @@ const ProductDetail = () => {
                   const sizeLow = stock !== Infinity && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
                   return (
                   <div key={size} className="flex flex-col items-center gap-1" style={{ width: 56 }}>
-                    <button
+                    <button type="button"
                       onClick={() => !sizeOut && setSelectedSize(size)}
                       disabled={sizeOut}
                       className="w-12 h-12 rounded-full font-serif text-sm font-bold transition-all duration-200 border-2"
@@ -505,13 +525,13 @@ const ProductDetail = () => {
                     const isSelected = selected?.name === opt.name;
                     if (isColorGroup) {
                       return (
-                        <button key={opt.name} title={opt.name}
+                        <button type="button" key={opt.name} title={opt.name}
                           onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
                           style={{ width: 32, height: 32, borderRadius: "50%", background: opt.name, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
                       );
                     }
                     return (
-                      <button key={opt.name}
+                      <button type="button" key={opt.name}
                         onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
                         style={{ padding: "0.4rem 1rem", borderRadius: "2rem", fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", transition: "all 0.15s", border: "2px solid", borderColor: isSelected ? "hsl(var(--primary))" : "hsl(var(--border))", background: isSelected ? "hsl(var(--primary))" : "transparent", color: isSelected ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
                         {opt.name}{opt.price_diff !== 0 && <span style={{ fontSize: "0.68rem", marginLeft: 4, opacity: 0.75 }}>{region === "UK" ? `+£${opt.price_diff}` : `+Rs. ${opt.price_diff}`}</span>}
@@ -563,7 +583,7 @@ const ProductDetail = () => {
                         {ci.options.map((col) => {
                           const isSelected = customValues[ci.id] === col;
                           return (
-                            <button key={col} title={col}
+                            <button type="button" key={col} title={col}
                               onClick={() => { setCustomValues((prev) => ({ ...prev, [ci.id]: col })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
                               style={{ width: 34, height: 34, borderRadius: "50%", background: col, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
                           );
@@ -598,7 +618,7 @@ const ProductDetail = () => {
             <div className="mb-4">
               <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">Quantity</p>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <button
+                <button type="button"
                   onClick={() => {
                     if (hasSizes && !selectedSize) { toast.error("Please select a size first"); return; }
                     const q = Math.max(1, quantity - 1); setQuantity(q); setQuantityError("");
@@ -607,7 +627,7 @@ const ProductDetail = () => {
                   style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: hasSizes && !selectedSize ? "not-allowed" : "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: hasSizes && !selectedSize ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center", opacity: hasSizes && !selectedSize ? 0.4 : 1 }}
                 >−</button>
                 <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: hasSizes && !selectedSize ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", minWidth: 24, textAlign: "center", opacity: hasSizes && !selectedSize ? 0.4 : 1 }}>{quantity}</span>
-                <button
+                <button type="button"
                   onClick={() => {
                     if (hasSizes && !selectedSize) { toast.error("Please select a size first"); return; }
                     const max = selectedSizeStock !== Infinity ? selectedSizeStock : 99;
@@ -637,12 +657,12 @@ const ProductDetail = () => {
 
           {/* Add to cart */}
           {isOOS ? (
-            <button disabled className="w-full border-none rounded-full py-4 font-serif font-extrabold text-sm tracking-[0.2em] uppercase mb-8"
+            <button type="button" disabled className="w-full border-none rounded-full py-4 font-serif font-extrabold text-sm tracking-[0.2em] uppercase mb-8"
               style={{ background: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))", cursor: "not-allowed", opacity: 0.65 }}>
               Out of Stock
             </button>
           ) : (
-            <button onClick={handleAddToCart}
+            <button type="button" onClick={handleAddToCart}
               className="w-full bg-primary text-primary-foreground border-none rounded-full py-4 font-serif font-extrabold text-sm tracking-[0.2em] uppercase cursor-pointer transition-transform duration-200 hover:scale-[1.02] mb-8">
               Add to Cart
             </button>
@@ -654,11 +674,11 @@ const ProductDetail = () => {
             const hasTee = availableAs.length === 0 || availableAs.includes("tee");
             const hasTank = availableAs.length === 0 || availableAs.includes("tank");
             const label = hasTee && hasTank
-              ? `Size Guide — ${selectedType === "tee" ? "Tee" : "Tank"}`
+              ? `Size Guide — ${effectiveType === "tee" ? "Tee" : "Tank"}`
               : hasTank ? "Size Guide — Tank" : "Size Guide — Tee";
             return (
               <div className="border-t border-border">
-                <button onClick={() => setSizeGuideOpen((p) => !p)}
+                <button type="button" onClick={() => setSizeGuideOpen((p) => !p)}
                   className="w-full bg-transparent border-none py-4 flex justify-between items-center cursor-pointer text-foreground font-serif text-base font-bold">
                   {label}
                   <span className="text-xl transition-transform duration-200" style={{ transform: sizeGuideOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
@@ -673,14 +693,14 @@ const ProductDetail = () => {
           })()}
 
           <div className="border-t border-border">
-            <button onClick={() => setDescOpen((p) => !p)}
+            <button type="button" onClick={() => setDescOpen((p) => !p)}
               className="w-full bg-transparent border-none py-4 flex justify-between items-center cursor-pointer text-foreground font-serif text-base font-bold">
               Description
               <span className="text-xl transition-transform duration-200" style={{ transform: descOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
             </button>
             {descOpen && <p className="text-foreground font-serif text-sm leading-relaxed opacity-75 pb-4">
               {(isTeeProduct || isLimited)
-                ? (selectedType === "tee"
+                ? (effectiveType === "tee"
                     ? ((dbProduct as any)?.tee_description || "")
                     : ((dbProduct as any)?.tank_description || ""))
                 : product.description}
@@ -688,7 +708,7 @@ const ProductDetail = () => {
           </div>
 
           <div className="border-t border-b border-border">
-            <button onClick={() => setCareOpen((p) => !p)}
+            <button type="button" onClick={() => setCareOpen((p) => !p)}
               className="w-full bg-transparent border-none py-4 flex justify-between items-center cursor-pointer text-foreground font-serif text-base font-bold">
               Care Instructions
               <span className="text-xl transition-transform duration-200" style={{ transform: careOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
@@ -707,7 +727,7 @@ const ProductDetail = () => {
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }} onClick={() => setSizeGuideZoomed(false)}>
           <div className="relative max-w-[500px] w-[90vw] mx-auto bg-card rounded-2xl overflow-hidden shadow-2xl max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setSizeGuideZoomed(false)}
+            <button type="button" onClick={() => setSizeGuideZoomed(false)}
               className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-destructive text-white flex items-center justify-center font-black text-sm cursor-pointer border-none">✕</button>
             <img src={sizeGuideImage} alt="Size Guide" className="w-full h-auto block" />
           </div>

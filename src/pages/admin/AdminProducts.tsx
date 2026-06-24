@@ -52,7 +52,11 @@ const emptyProduct = {
   available_as: [] as string[], product_tags: [] as string[],
   stock_status: "in_stock", display_order: 0,
   variants: [] as VariantOption[],
+  tee_variants: [] as VariantOption[],
+  tank_variants: [] as VariantOption[],
   custom_inputs: [] as CustomInput[],
+  tee_custom_inputs: [] as CustomInput[],
+  tank_custom_inputs: [] as CustomInput[],
   size_guide_tee: "/images/size-guide-tees.png",
   size_guide_tank: "/images/size-guide-tanks.jpg",
   tee_description: "",
@@ -88,10 +92,10 @@ function ProductCard({ p, onEdit, onDelete }: { p: any; onEdit: (p: any) => void
         </span>
       )}
       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={() => onEdit(p)} className="h-8 w-8 bg-card/90 border border-border rounded-lg flex items-center justify-center hover:bg-accent">
+        <button type="button" onClick={() => onEdit(p)} className="h-8 w-8 bg-card/90 border border-border rounded-lg flex items-center justify-center hover:bg-accent">
           <Pencil className="h-3.5 w-3.5 text-foreground" />
         </button>
-        <button onClick={() => onDelete(p.id)} className="h-8 w-8 bg-card/90 border border-border rounded-lg flex items-center justify-center hover:bg-destructive/10">
+        <button type="button" onClick={() => onDelete(p.id)} className="h-8 w-8 bg-card/90 border border-border rounded-lg flex items-center justify-center hover:bg-destructive/10">
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </button>
       </div>
@@ -127,6 +131,9 @@ function ProductCard({ p, onEdit, onDelete }: { p: any; onEdit: (p: any) => void
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+type VField  = "variants"     | "tee_variants"     | "tank_variants";
+type CiField = "custom_inputs" | "tee_custom_inputs" | "tank_custom_inputs";
+
 export default function AdminProducts() {
   const { data: products = [], isLoading } = useProducts();
   const upsert    = useUpsertProduct();
@@ -165,34 +172,52 @@ export default function AdminProducts() {
   const [ciPlaceholder, setCiPlaceholder] = useState("");
   const [ciOptions,     setCiOptions]     = useState("");
 
+  // Which style tab is active in the per-style custom inputs section
+  const [customInputTab, setCustomInputTab] = useState<"shared" | "tee" | "tank">("shared");
+  // Which style tab is active in the per-style variant options section
+  const [variantTab, setVariantTab] = useState<"shared" | "tee" | "tank">("shared");
+  // Which style column has the add-form open (variants / custom inputs)
+  const [vDraftStyle,  setVDraftStyle]  = useState<"tee" | "tank" | null>(null);
+  const [ciDraftStyle, setCiDraftStyle] = useState<"tee" | "tank" | null>(null);
+
   // Which section's "Add" was clicked — determines dialog mode
   const [dialogSection, setDialogSection] = useState<"tees-tanks" | "limited" | "accessories">("tees-tanks");
 
-  const openNew = (section: "tees-tanks" | "accessories") => {
+  const openNew = (section: "tees-tanks" | "accessories" | "limited") => {
     setDialogSection(section);
     setEditProduct({
       ...emptyProduct,
       category: section === "accessories" ? "Accessories" : section === "limited" ? "Limited Edition" : "Tees & Tank Tops",
       display_order: products.length + 1,
     });
+    setVDraftStyle(null);
+    setCiDraftStyle(null);
     setOpen(true);
   };
 
   const openEdit = (p: any) => {
     const section = p.category === "Accessories" ? "accessories" : p.category === "Limited Edition" ? "limited" : "tees-tanks";
     setDialogSection(section);
-    setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], custom_inputs: p.custom_inputs || [], size_guide_tee: p.size_guide_tee || "/images/size-guide-tees.png", size_guide_tank: p.size_guide_tank || "/images/size-guide-tanks.jpg", tee_description: p.tee_description || "", tank_description: p.tank_description || "" });
+    setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], tee_variants: p.tee_variants || [], tank_variants: p.tank_variants || [], custom_inputs: p.custom_inputs || [], tee_custom_inputs: p.tee_custom_inputs || [], tank_custom_inputs: p.tank_custom_inputs || [], size_guide_tee: p.size_guide_tee || "/images/size-guide-tees.png", size_guide_tank: p.size_guide_tank || "/images/size-guide-tanks.jpg", tee_description: p.tee_description || "", tank_description: p.tank_description || "" });
+    setVDraftStyle(null);
+    setCiDraftStyle(null);
     setOpen(true);
   };
 
-  // ── Save — auto-apply fixed sizes for tees/tanks ──
+  // ── Save — auto-apply fixed sizes for tees/tanks and limited edition ──
   const handleSave = async () => {
     if (!editProduct) return;
     try {
       let toSave = { ...editProduct };
-      if (dialogSection === "tees-tanks") {
-        const isTank = toSave.available_as?.includes("tank") && !toSave.available_as?.includes("tee");
-        toSave.sizes = isTank ? TANK_SIZES : TEE_SIZES;
+      if (dialogSection === "tees-tanks" || dialogSection === "limited") {
+        const availAs: string[] = toSave.available_as || [];
+        const onlyTank = availAs.includes("tank") && !availAs.includes("tee");
+        const onlyTee  = availAs.includes("tee")  && !availAs.includes("tank");
+        const both     = availAs.includes("tee")  &&  availAs.includes("tank");
+        if (onlyTank)       toSave.sizes = TANK_SIZES;
+        else if (onlyTee)   toSave.sizes = TEE_SIZES;
+        else if (both)      toSave.sizes = [...new Set([...TEE_SIZES, ...TANK_SIZES])];
+        else                toSave.sizes = TEE_SIZES; // fallback
       }
       await upsert.mutateAsync(toSave);
       setOpen(false);
@@ -271,17 +296,17 @@ export default function AdminProducts() {
     });
   };
 
-  // ── Variant helpers ──
-  const addVariant = () => {
+  // ── Variant helpers — work on any of the three field keys ──
+  const addVariant = (field: VField = "variants") => {
     if (!vName.trim()) return;
     setEditProduct((prev: any) => ({
       ...prev,
-      variants: [...(prev.variants || []), { label: vLabel, name: vName.trim(), price_diff: vPriceDiff }],
+      [field]: [...(prev[field] || []), { label: vLabel, name: vName.trim(), price_diff: vPriceDiff }],
     }));
     setVName(""); setVPriceDiff(0);
   };
-  const removeVariant = (idx: number) =>
-    setEditProduct((prev: any) => ({ ...prev, variants: prev.variants.filter((_: any, i: number) => i !== idx) }));
+  const removeVariant = (idx: number, field: VField = "variants") =>
+    setEditProduct((prev: any) => ({ ...prev, [field]: (prev[field] || []).filter((_: any, i: number) => i !== idx) }));
 
   const addPresetVariants = (presetName: string) => {
     const options = ACCESSORY_STYLE_PRESETS[presetName] || [];
@@ -292,8 +317,8 @@ export default function AdminProducts() {
     toast.success(`Added ${options.length} style options`);
   };
 
-  // ── Custom input helpers ──
-  const addCustomInput = () => {
+  // ── Custom input helpers — work on any of the three field keys ──
+  const addCustomInput = (field: CiField = "custom_inputs") => {
     if (!ciLabel.trim()) return;
     const ci: CustomInput = {
       id: uid(), label: ciLabel.trim(), type: ciType, required: ciRequired,
@@ -301,15 +326,15 @@ export default function AdminProducts() {
       options: ciType === "select" || ciType === "color"
         ? ciOptions.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
     };
-    setEditProduct((prev: any) => ({ ...prev, custom_inputs: [...(prev.custom_inputs || []), ci] }));
+    setEditProduct((prev: any) => ({ ...prev, [field]: [...(prev[field] || []), ci] }));
     setCiLabel(""); setCiType("text"); setCiRequired(false); setCiPlaceholder(""); setCiOptions("");
   };
-  const removeCustomInput = (id: string) =>
-    setEditProduct((prev: any) => ({ ...prev, custom_inputs: prev.custom_inputs.filter((c: CustomInput) => c.id !== id) }));
-  const updateCustomInput = (id: string, patch: Partial<CustomInput>) =>
+  const removeCustomInput = (id: string, field: CiField = "custom_inputs") =>
+    setEditProduct((prev: any) => ({ ...prev, [field]: (prev[field] || []).filter((c: CustomInput) => c.id !== id) }));
+  const updateCustomInput = (id: string, patch: Partial<CustomInput>, field: CiField = "custom_inputs") =>
     setEditProduct((prev: any) => ({
       ...prev,
-      custom_inputs: prev.custom_inputs.map((c: CustomInput) => c.id === id ? { ...c, ...patch } : c),
+      [field]: (prev[field] || []).map((c: CustomInput) => c.id === id ? { ...c, ...patch } : c),
     }));
 
   // ── Categorise ──
@@ -336,7 +361,7 @@ export default function AdminProducts() {
               {teesAndTanks.length}
             </span>
           </div>
-          <Button onClick={() => openNew("tees-tanks")} size="sm" className="font-serif gap-2">
+          <Button type="button" onClick={() => openNew("tees-tanks")} size="sm" className="font-serif gap-2">
             <Plus className="h-4 w-4" /> Add Product
           </Button>
         </div>
@@ -362,7 +387,7 @@ export default function AdminProducts() {
               {accessories.length}
             </span>
           </div>
-          <Button onClick={() => openNew("accessories")} size="sm" className="font-serif gap-2">
+          <Button type="button" onClick={() => openNew("accessories")} size="sm" className="font-serif gap-2">
             <Plus className="h-4 w-4" /> Add Accessory
           </Button>
         </div>
@@ -388,7 +413,7 @@ export default function AdminProducts() {
               {limitedEdition.length}
             </span>
           </div>
-          <Button onClick={() => openNew("limited")} size="sm" className="font-serif gap-2">
+          <Button type="button" onClick={() => openNew("limited")} size="sm" className="font-serif gap-2">
             <Plus className="h-4 w-4" /> Add Limited
           </Button>
         </div>
@@ -406,6 +431,7 @@ export default function AdminProducts() {
       {/* ════════ ADD / EDIT DIALOG ════════ */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          {!editProduct ? null : (<>
           <DialogHeader>
             <DialogTitle className="font-serif">
               {editProduct?.id
@@ -431,7 +457,7 @@ export default function AdminProducts() {
                       <div key={idx} className="relative w-[72px] h-[72px] rounded-lg overflow-hidden border border-border group">
                         <img src={src} alt="" className="w-full h-full object-cover" />
                         {idx === 0 && <span className="absolute bottom-0 left-0 right-0 bg-primary/80 text-primary-foreground font-serif text-[8px] text-center py-0.5">Cover</span>}
-                        <button onClick={() => removeImage(idx)} className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer font-bold text-[9px]">✕</button>
+                        <button type="button" onClick={() => removeImage(idx)} className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer font-bold text-[9px]">✕</button>
                       </div>
                     ))}
                   </div>
@@ -501,7 +527,7 @@ export default function AdminProducts() {
                     {(["tee", "tank"] as const).map((type) => {
                       const isActive = (editProduct.available_as || []).includes(type);
                       return (
-                        <button
+                        <button type="button"
                           key={type}
                           onClick={() => setEditProduct((prev: any) => ({
                             ...prev,
@@ -537,7 +563,7 @@ export default function AdminProducts() {
                     {(["tee", "tank"] as const).map((type) => {
                       const isActive = (editProduct.available_as || []).includes(type);
                       return (
-                        <button
+                        <button type="button"
                           key={type}
                           onClick={() => setEditProduct((prev: any) => ({
                             ...prev,
@@ -564,26 +590,6 @@ export default function AdminProducts() {
                 </div>
               )}
 
-              {/* ── ACCESSORIES: quick style presets ── */}
-              {dialogSection === "accessories" && (
-                <div className="space-y-2">
-                  <SectionLabel>Quick Style Presets</SectionLabel>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.keys(ACCESSORY_STYLE_PRESETS).map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => addPresetVariants(preset)}
-                        className="font-serif text-xs px-3 py-1.5 rounded-lg border border-border bg-secondary/40 hover:bg-secondary transition-colors text-foreground"
-                      >
-                        + {preset}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="font-serif text-[10px] text-muted-foreground">Or add options manually below.</p>
-                </div>
-              )}
-
-
               {/* ── SIZE GUIDE IMAGES (tees-tanks + limited) ── */}
               {(dialogSection === "tees-tanks" || dialogSection === "limited") && (
                 <div className="space-y-3">
@@ -595,7 +601,7 @@ export default function AdminProducts() {
                     {editProduct.size_guide_tee && (
                       <div className="relative w-full max-w-[160px] rounded-lg overflow-hidden border border-border group">
                         <img src={editProduct.size_guide_tee} alt="Tee size guide" className="w-full h-auto object-cover" />
-                        <button onClick={() => setEditProduct((prev: any) => ({ ...prev, size_guide_tee: "" }))}
+                        <button type="button" onClick={() => setEditProduct((prev: any) => ({ ...prev, size_guide_tee: "" }))}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer text-[9px] font-bold">✕</button>
                       </div>
                     )}
@@ -609,7 +615,7 @@ export default function AdminProducts() {
                     {editProduct.size_guide_tank && (
                       <div className="relative w-full max-w-[160px] rounded-lg overflow-hidden border border-border group">
                         <img src={editProduct.size_guide_tank} alt="Tank size guide" className="w-full h-auto object-cover" />
-                        <button onClick={() => setEditProduct((prev: any) => ({ ...prev, size_guide_tank: "" }))}
+                        <button type="button" onClick={() => setEditProduct((prev: any) => ({ ...prev, size_guide_tank: "" }))}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-none cursor-pointer text-[9px] font-bold">✕</button>
                       </div>
                     )}
@@ -625,9 +631,23 @@ export default function AdminProducts() {
                   <span className="normal-case font-normal text-[10px]"> — selectable choices (colour, style…)</span>
                 </SectionLabel>
 
-                {editProduct.variants?.length > 0 && (
+                {dialogSection === "accessories" && (
+                  <div className="space-y-2">
+                    <SectionLabel>Quick Style Presets</SectionLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.keys(ACCESSORY_STYLE_PRESETS).map((preset) => (
+                        <button type="button" key={preset} onClick={() => addPresetVariants(preset)}
+                          className="font-serif text-xs px-3 py-1.5 rounded-lg border border-border bg-secondary/40 hover:bg-secondary transition-colors text-foreground">
+                          + {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(editProduct.variants || []).length > 0 && (
                   <div className="space-y-1.5">
-                    {editProduct.variants.map((v: VariantOption, idx: number) => (
+                    {(editProduct.variants || []).map((v: VariantOption, idx: number) => (
                       <div key={idx} className="flex items-center gap-2 bg-secondary/40 rounded-lg px-3 py-2">
                         {(v.label.toLowerCase() === "color" || v.label.toLowerCase() === "colour") && (
                           <span style={{ width: 14, height: 14, borderRadius: "50%", background: v.name, border: "1px solid hsl(var(--border))", flexShrink: 0 }} />
@@ -635,7 +655,7 @@ export default function AdminProducts() {
                         <span className="font-serif text-xs text-muted-foreground flex-shrink-0">{v.label}:</span>
                         <span className="font-serif text-xs font-bold text-foreground flex-1">{v.name}</span>
                         {v.price_diff !== 0 && <span className="font-serif text-xs text-muted-foreground">{v.price_diff > 0 ? "+" : ""}PKR {v.price_diff}</span>}
-                        <button onClick={() => removeVariant(idx)} className="w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
+                        <button type="button" onClick={() => removeVariant(idx)} className="w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
                       </div>
                     ))}
                   </div>
@@ -646,11 +666,11 @@ export default function AdminProducts() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="font-serif text-[10px]">Label</Label>
-                      <Input value={vLabel} onChange={(e) => setVLabel(e.target.value)} placeholder={dialogSection === "accessories" ? "Style" : "Color"} className="font-serif text-xs h-8 mt-1" />
+                      <Input value={vLabel} onChange={(e) => setVLabel(e.target.value)} placeholder="e.g. Color" className="font-serif text-xs h-8 mt-1" />
                     </div>
                     <div>
                       <Label className="font-serif text-[10px]">Value</Label>
-                      <Input value={vName} onChange={(e) => setVName(e.target.value)} placeholder={dialogSection === "accessories" ? "e.g. Chilli Charm" : "e.g. Red"} className="font-serif text-xs h-8 mt-1" />
+                      <Input value={vName} onChange={(e) => setVName(e.target.value)} placeholder="e.g. Rose Pink" className="font-serif text-xs h-8 mt-1" />
                     </div>
                   </div>
                   <div className="flex items-end gap-2">
@@ -658,7 +678,7 @@ export default function AdminProducts() {
                       <Label className="font-serif text-[10px]">Price diff (PKR, 0 = same)</Label>
                       <Input type="number" value={vPriceDiff} onChange={(e) => setVPriceDiff(Number(e.target.value))} className="font-serif text-xs h-8 mt-1" />
                     </div>
-                    <Button onClick={addVariant} disabled={!vName.trim()} size="sm" className="font-serif h-8 text-xs">
+                    <Button type="button" onClick={() => addVariant()} disabled={!vName.trim()} size="sm" className="font-serif h-8 text-xs">
                       <Plus className="h-3 w-3 mr-1" /> Add
                     </Button>
                   </div>
@@ -669,11 +689,11 @@ export default function AdminProducts() {
               <div className="space-y-2">
                 <SectionLabel>Custom Input Fields <span className="normal-case font-normal text-[10px]">— customer fills in at checkout</span></SectionLabel>
 
-                {editProduct.custom_inputs?.length > 0 && (
+                {(editProduct.custom_inputs || []).length > 0 && (
                   <div className="space-y-2">
-                    {editProduct.custom_inputs.map((ci: CustomInput) => (
+                    {(editProduct.custom_inputs || []).map((ci: CustomInput) => (
                       <div key={ci.id} className="border border-border rounded-lg p-3 space-y-2 relative">
-                        <button onClick={() => removeCustomInput(ci.id)} className="absolute top-2 right-2 w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
+                        <button type="button" onClick={() => removeCustomInput(ci.id)} className="absolute top-2 right-2 w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <Label className="font-serif text-[10px]">Label</Label>
@@ -718,7 +738,7 @@ export default function AdminProducts() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="font-serif text-[10px]">Field label</Label>
-                      <Input value={ciLabel} onChange={(e) => setCiLabel(e.target.value)} placeholder="e.g. Wedding Date" className="font-serif text-xs h-8 mt-1" />
+                      <Input value={ciLabel} onChange={(e) => setCiLabel(e.target.value)} placeholder="e.g. Colour, Design" className="font-serif text-xs h-8 mt-1" />
                     </div>
                     <div>
                       <Label className="font-serif text-[10px]">Type</Label>
@@ -737,7 +757,7 @@ export default function AdminProducts() {
                   {ciType === "text" && (
                     <div>
                       <Label className="font-serif text-[10px]">Placeholder</Label>
-                      <Input value={ciPlaceholder} onChange={(e) => setCiPlaceholder(e.target.value)} placeholder="e.g. June 12, 2025" className="font-serif text-xs h-8 mt-1" />
+                      <Input value={ciPlaceholder} onChange={(e) => setCiPlaceholder(e.target.value)} placeholder="e.g. Enter your preferred colour" className="font-serif text-xs h-8 mt-1" />
                     </div>
                   )}
                   {(ciType === "select" || ciType === "color") && (
@@ -751,7 +771,7 @@ export default function AdminProducts() {
                       <input type="checkbox" checked={ciRequired} onChange={(e) => setCiRequired(e.target.checked)} style={{ accentColor: "hsl(var(--primary))" }} />
                       <span className="font-serif text-[11px] text-muted-foreground">Required</span>
                     </label>
-                    <Button onClick={addCustomInput} disabled={!ciLabel.trim()} size="sm" className="font-serif h-8 text-xs">
+                    <Button type="button" onClick={() => addCustomInput()} disabled={!ciLabel.trim()} size="sm" className="font-serif h-8 text-xs">
                       <Plus className="h-3 w-3 mr-1" /> Add Field
                     </Button>
                   </div>
@@ -763,7 +783,7 @@ export default function AdminProducts() {
                 <SectionLabel>Product Tags</SectionLabel>
                 <div className="flex flex-wrap gap-2">
                   {ALL_TAGS.map((tag) => (
-                    <button
+                    <button type="button"
                       key={tag}
                       onClick={() => setEditProduct({ ...editProduct, product_tags: toggleArr(editProduct.product_tags, tag) })}
                       className={`font-serif text-xs px-3 py-1.5 rounded-lg border capitalize transition-colors ${
@@ -788,11 +808,12 @@ export default function AdminProducts() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} className="font-serif">Cancel</Button>
-            <Button onClick={handleSave} disabled={upsert.isPending} className="font-serif">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="font-serif">Cancel</Button>
+            <Button type="button" onClick={handleSave} disabled={upsert.isPending} className="font-serif">
               {upsert.isPending ? "Saving…" : "Save Product"}
             </Button>
           </DialogFooter>
+          </>)}
         </DialogContent>
       </Dialog>
 

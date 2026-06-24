@@ -31,7 +31,10 @@ function getMonthKey(dateStr: string) {
 }
 
 function buildRevenueData(orders: any[], region: "PK" | "UK") {
-  const filtered = orders.filter((o) => o.region === region);
+  // Only count confirmed orders (not pending or cancelled)
+  const filtered = orders.filter(
+    (o) => o.region === region && o.status !== "pending" && o.status !== "cancelled"
+  );
   const map: Record<string, number> = {};
   filtered.forEach((o) => {
     const key = getMonthKey(o.created_at);

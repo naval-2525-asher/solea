@@ -19,11 +19,20 @@ const autoStatus = (count: number) =>
 
 // A product can be tee, tank, or both
 const getTypes = (product: any): { isTee: boolean; isTank: boolean } => {
+  const avAs: string[] = product.available_as || [];
   const tags: string[] = product.product_tags || [];
-  const avAs: string[] = product.available_as  || [];
-  const combined = [...tags, ...avAs];
-  const isTank = combined.includes("tank");
-  const isTee  = combined.includes("tee") || (!isTank); // default to tee if no tag
+  const combined = [...avAs, ...tags];
+
+  // If available_as is explicitly set, trust it completely
+  if (avAs.length > 0) {
+    return {
+      isTee:  avAs.includes("tee"),
+      isTank: avAs.includes("tank"),
+    };
+  }
+  // Fall back to tags
+  const isTank = tags.includes("tank");
+  const isTee  = tags.includes("tee") || combined.length === 0; // default to tee only if completely untagged
   return { isTee, isTank };
 };
 
@@ -126,11 +135,14 @@ export default function AdminInventory() {
 
   const teesTanksRef   = useRef<HTMLDivElement>(null);
   const accessoriesRef = useRef<HTMLDivElement>(null);
+  const limitedRef     = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = (hash === "#tees" || hash === "#tanks" || hash === "#tees-tanks")
       ? teesTanksRef.current
-      : hash === "#accessories" ? accessoriesRef.current : null;
+      : hash === "#accessories" ? accessoriesRef.current
+      : (hash === "#limited" || hash === "#limited-edition") ? limitedRef.current
+      : null;
     if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }, [hash]);
 
@@ -236,8 +248,9 @@ export default function AdminInventory() {
     }
   };
 
-  const teesAndTanks = (products as any[]).filter((p) => p.category === "Tees & Tank Tops");
-  const accessories  = (products as any[]).filter((p) => p.category === "Accessories");
+  const teesAndTanks   = (products as any[]).filter((p) => p.category === "Tees & Tank Tops");
+  const limitedEdition = (products as any[]).filter((p) => p.category === "Limited Edition");
+  const accessories    = (products as any[]).filter((p) => p.category === "Accessories");
 
   const applyFilter = (list: any[]) =>
     list.filter((p: any) =>
@@ -423,6 +436,7 @@ export default function AdminInventory() {
   if (isLoading) return <div className="font-serif text-sm text-muted-foreground p-8">Loading...</div>;
 
   const filteredTeeTank     = applyFilter(teesAndTanks);
+  const filteredLimited     = applyFilter(limitedEdition);
   const filteredAccessories = applyFilter(accessories);
 
   return (
@@ -495,6 +509,40 @@ export default function AdminInventory() {
               {filteredTeeTank.length === 0
                 ? <tr><td colSpan={7} className="p-8 text-center font-serif text-sm text-muted-foreground">No products match current filter.</td></tr>
                 : filteredTeeTank.map((p: any) => renderTeeTankRow(p))}
+            </tbody>
+          </table>
+        </div>
+      </SectionDropdown>
+
+      {/* ── Limited Edition table ── */}
+      <SectionDropdown title="✨ Limited Edition" count={filteredLimited.length} sectionRef={limitedRef}>
+        <div className="overflow-x-auto">
+          <table className="w-full font-serif text-sm">
+            <thead>
+              <tr className="border-b border-border bg-secondary/30">
+                <th className="text-left p-4 text-muted-foreground font-medium">Product</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">Total</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">
+                  <div className="flex flex-col gap-0.5">
+                    <span>🎽 Tank Sizes</span>
+                    <span className="font-normal text-[10px] opacity-60">S · M · L</span>
+                  </div>
+                </th>
+                <th className="text-left p-4 text-muted-foreground font-medium">
+                  <div className="flex flex-col gap-0.5">
+                    <span>👕 Tee Sizes</span>
+                    <span className="font-normal text-[10px] opacity-60">S · M · L · XL</span>
+                  </div>
+                </th>
+                <th className="text-left p-4 text-muted-foreground font-medium">By Color</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">Status</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">Save</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLimited.length === 0
+                ? <tr><td colSpan={7} className="p-8 text-center font-serif text-sm text-muted-foreground">No limited edition products match current filter.</td></tr>
+                : filteredLimited.map((p: any) => renderTeeTankRow(p))}
             </tbody>
           </table>
         </div>

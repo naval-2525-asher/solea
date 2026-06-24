@@ -9,6 +9,7 @@ import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
 import { getAccessoryVariantStock, getProductTotalStock, LOW_STOCK_THRESHOLD } from "@/lib/inventory";
+import { useSaleProducts } from "@/hooks/useAdminData";
 
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -48,6 +49,12 @@ const AccessoryDetail = () => {
 
   const { addToCart, items: cartItems } = useCart();
   const { region, formatPrice } = useRegion();
+  const { data: saleItems = [] } = useSaleProducts();
+
+  // Find if this product is on sale
+  const saleEntry = (saleItems as any[]).find((s: any) => String(s.product_id) === String(id));
+  const activeSalePrice: number | null = saleEntry ? Number(saleEntry.sale_price) : null;
+  const activeSalePriceGbp: number | null = saleEntry?.sale_price_gbp ? Number(saleEntry.sale_price_gbp) : null;
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
@@ -194,12 +201,17 @@ const AccessoryDetail = () => {
         return;
       }
       selectedMulti.forEach((variantName) => {
+        const variantPriceDiff = product.variants.find((v: any) => v.name === variantName)?.price_diff || 0;
+        // Use sale price if available (sale price overrides the base; variant diff still applies on top)
+        const effectiveBase = activeSalePrice !== null
+          ? (region === "UK" && activeSalePriceGbp ? activeSalePriceGbp : activeSalePrice)
+          : (region === "UK" && (dbProduct as any)?.price_gbp ? Number((dbProduct as any).price_gbp) : basePrice);
         for (let i = 0; i < qty; i++) {
           addToCart({
             productId: productIdForCart,
             name: product.name,
             image: allImages[0] || product.image,
-            price: basePrice + (product.variants.find((v: any) => v.name === variantName)?.price_diff || 0),
+            price: effectiveBase + variantPriceDiff,
             size: variantName,
             style: "accessory",
             customisation: { Style: variantName },
@@ -222,12 +234,16 @@ const AccessoryDetail = () => {
         toast({ title: `Only ${remaining} of "${selectedVariant}" available`, variant: "destructive" });
         return;
       }
+      const variantPriceDiff = selectedVariantObj?.price_diff || 0;
+      const effectiveBaseForVariant = activeSalePrice !== null
+        ? (region === "UK" && activeSalePriceGbp ? activeSalePriceGbp : activeSalePrice)
+        : (region === "UK" && (dbProduct as any)?.price_gbp ? Number((dbProduct as any).price_gbp) : basePrice);
       for (let i = 0; i < qty; i++) {
         addToCart({
           productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
-          price: singleTotal / qty,
+          price: effectiveBaseForVariant + variantPriceDiff,
           size: selectedVariant,
           style: "accessory",
           customisation: { Style: selectedVariant },
@@ -243,12 +259,15 @@ const AccessoryDetail = () => {
         toast({ title: `Only ${totalRemaining} available`, variant: "destructive" });
         return;
       }
+      const effectiveBaseNoVariant = activeSalePrice !== null
+        ? (region === "UK" && activeSalePriceGbp ? activeSalePriceGbp : activeSalePrice)
+        : (region === "UK" && (dbProduct as any)?.price_gbp ? Number((dbProduct as any).price_gbp) : basePrice);
       for (let i = 0; i < qty; i++) {
         addToCart({
           productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
-          price: basePrice,
+          price: effectiveBaseNoVariant,
           size: "One Size",
           style: "accessory",
         });
@@ -343,7 +362,30 @@ const AccessoryDetail = () => {
           <h1 className="text-foreground font-serif text-4xl font-black mb-2">{product.name}</h1>
 
           {/* Price */}
-          {isMultiSelect && selectedMulti.length > 0 ? (
+          {activeSalePrice !== null ? (
+            <div className="mb-8">
+              {/* Sale price display */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <p className="font-serif text-lg" style={{ textDecoration: "line-through", opacity: 0.5 }}>
+                  {formatPrice(basePrice, (dbProduct as any)?.price_gbp)}
+                </p>
+                <p className="text-foreground font-serif text-2xl font-bold" style={{ color: "#dc2626" }}>
+                  {region === "UK"
+                    ? activeSalePriceGbp
+                      ? `£${Number(activeSalePriceGbp).toLocaleString("en-GB")}`
+                      : `£${Number((dbProduct as any)?.price_gbp ?? 0).toLocaleString("en-GB")}`
+                    : `Rs. ${Number(activeSalePrice).toLocaleString()}`}
+                </p>
+                <span style={{
+                  background: "#dc2626", color: "#fff",
+                  fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem",
+                  padding: "3px 10px", borderRadius: "2rem", letterSpacing: "0.05em",
+                }}>
+                  -{Math.round(((basePrice - activeSalePrice) / basePrice) * 100)}%
+                </span>
+              </div>
+            </div>
+          ) : isMultiSelect && selectedMulti.length > 0 ? (
             <>
               <p className="text-foreground font-serif text-lg font-bold mb-1">{formatPrice(basePrice, (dbProduct as any)?.price_gbp)} each</p>
               <p className="text-foreground font-serif text-2xl font-bold mb-8">

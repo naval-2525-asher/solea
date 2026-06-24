@@ -45,6 +45,29 @@ export default function AdminStorefront() {
   const announcementUKText = settings.find((s: any) => s.key === "announcement_text_uk")?.value || "";
   const [announcementPK, setAnnouncementPK] = useState<string | null>(null);
   const [announcementUK, setAnnouncementUK] = useState<string | null>(null);
+  const [uploadingCatKey, setUploadingCatKey] = useState<string | null>(null);
+
+  const CATEGORY_SETTINGS = [
+    { key: "category_image_tees", label: "Tees & Tank Tops", defaultImg: "/images/categories/tees-tanks.jpg" },
+    { key: "category_image_limited", label: "Limited Edition", defaultImg: "/images/categories/limited-edition.jpg" },
+    { key: "category_image_accessories", label: "Accessories", defaultImg: "/images/categories/accessories.jpg" },
+  ];
+
+  const handleUploadCategoryImage = async (e: React.ChangeEvent<HTMLInputElement>, settingKey: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCatKey(settingKey);
+    try {
+      const url = await uploadFile(file, "category-images");
+      await updateSetting.mutateAsync({ key: settingKey, value: url });
+      toast.success("Category image updated");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setUploadingCatKey(null);
+      e.target.value = "";
+    }
+  };
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string } | null>(null);
 
   // Best seller dialog
@@ -139,6 +162,59 @@ export default function AdminStorefront() {
   return (
     <div className="space-y-10">
       <h1 className="font-serif text-2xl font-black text-foreground">Storefront Manager</h1>
+
+      {/* Category Card Images */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-serif text-lg font-bold text-foreground">Shop by Category — Images</h2>
+          <p className="font-serif text-xs text-muted-foreground">The images shown on the homepage category cards. Click a card to replace the image.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {CATEGORY_SETTINGS.map((cat) => {
+            const currentImg = settings.find((s: any) => s.key === cat.key)?.value || cat.defaultImg;
+            const isUploading = uploadingCatKey === cat.key;
+            return (
+              <div key={cat.key} className="bg-card border border-border rounded-xl overflow-hidden group relative">
+                <div className="aspect-[3/2] bg-secondary/30 overflow-hidden relative">
+                  <img
+                    src={currentImg}
+                    alt={cat.label}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <span className="font-serif text-white text-xs animate-pulse">Uploading…</span>
+                    </div>
+                  )}
+                  {/* Upload overlay on hover */}
+                  <Label
+                    htmlFor={`cat-upload-${cat.key}`}
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors cursor-pointer"
+                  >
+                    <ImageIcon className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity mb-1" />
+                    <span className="font-serif text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">Replace Image</span>
+                    <input
+                      id={`cat-upload-${cat.key}`}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleUploadCategoryImage(e, cat.key)}
+                      disabled={isUploading}
+                    />
+                  </Label>
+                </div>
+                <div className="p-3">
+                  <p className="font-serif font-bold text-sm text-foreground">{cat.label}</p>
+                  <p className="font-serif text-[10px] text-muted-foreground mt-0.5">
+                    {settings.find((s: any) => s.key === cat.key)?.value ? "Custom image set" : "Using default image"}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Announcement Bars */}
       <section className="space-y-3">

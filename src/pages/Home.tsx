@@ -7,6 +7,13 @@ import { useHeroBanners, useReviews, useNewArrivals, useBestSellers, useSpottedI
 import RegionGate from "@/components/RegionGate";
 import { useRegion } from "@/context/RegionContext";
 
+// Default category images (fallback if not set in admin)
+const DEFAULT_CATEGORY_IMAGES: Record<string, string> = {
+  category_image_tees: "/images/categories/tees-tanks.jpg",
+  category_image_limited: "/images/categories/limited-edition.jpg",
+  category_image_accessories: "/images/categories/accessories.jpg",
+};
+
 const calcDiscount = (original: number, sale: number) =>
   Math.round(((original - sale) / original) * 100);
 
@@ -56,10 +63,11 @@ const Reveal = ({ children, delay = 0, direction = "up", className, style }: Rev
   );
 };
 
-const categories = [
-  { name: "Tees & Tank Tops", desc: "Hand embroidered beaded tees and tanks", href: "/shop", image: "/images/categories/tees-tanks.jpg" },
-  { name: "Limited Edition", desc: "One-of-a-kind exclusive pieces", href: "/limited-edition", image: "/images/categories/limited-edition.jpg" },
-  { name: "Accessories", desc: "Beaded charms, keychains & more", href: "/accessories", image: "/images/categories/accessories.jpg" },
+// Categories are defined statically but images come from admin settings
+const CATEGORY_DEFS = [
+  { name: "Tees & Tank Tops", desc: "Hand embroidered beaded tees and tanks", href: "/shop", settingKey: "category_image_tees" },
+  { name: "Limited Edition", desc: "One-of-a-kind exclusive pieces", href: "/limited-edition", settingKey: "category_image_limited" },
+  { name: "Accessories", desc: "Beaded charms, keychains & more", href: "/accessories", settingKey: "category_image_accessories" },
 ];
 
 const fallbackSpotted = [
@@ -464,6 +472,14 @@ const Home = () => {
   const { data: newArrivals = [] } = useNewArrivals();
   const { data: bestSellers = [] } = useBestSellers();
   const { data: saleItems = [] } = useSaleProducts();
+  const { data: settings = [] } = useSiteSettings();
+
+  // Build categories with images from admin settings (fall back to defaults)
+  const categories = CATEGORY_DEFS.map((cat) => ({
+    ...cat,
+    image: (settings as any[]).find((s: any) => s.key === cat.settingKey)?.value
+      || DEFAULT_CATEGORY_IMAGES[cat.settingKey],
+  }));
 
   useEffect(() => {
     const FADE_START_MS = 400;

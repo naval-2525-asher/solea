@@ -126,10 +126,16 @@ export function AdminSidebar() {
                       👕 Tees &amp; Tanks
                     </button>
                     <button
+                      onClick={() => navigate("/admin/products#limited")}
+                      className={`${subLinkClass} ${hash === "#limited" && isProductsActive ? activeSubLinkClass : ""}`}
+                    >
+                      ✨ Limited Edition
+                    </button>
+                    <button
                       onClick={() => navigate("/admin/products#accessories")}
                       className={`${subLinkClass} ${hash === "#accessories" && isProductsActive ? activeSubLinkClass : ""}`}
                     >
-                      ✨ Accessories
+                      💎 Accessories
                     </button>
                   </div>
                 )}
@@ -168,10 +174,16 @@ export function AdminSidebar() {
                       👕🎽 Tees &amp; Tanks
                     </button>
                     <button
+                      onClick={() => navigate("/admin/inventory#limited")}
+                      className={`${subLinkClass} ${hash === "#limited" && isInventoryActive ? activeSubLinkClass : ""}`}
+                    >
+                      ✨ Limited Edition
+                    </button>
+                    <button
                       onClick={() => navigate("/admin/inventory#accessories")}
                       className={`${subLinkClass} ${hash === "#accessories" && isInventoryActive ? activeSubLinkClass : ""}`}
                     >
-                      ✨ Accessories
+                      💎 Accessories
                     </button>
                   </div>
                 )}
