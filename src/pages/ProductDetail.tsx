@@ -522,26 +522,42 @@ const ProductDetail = () => {
                 {activeColors.map((colorName) => {
                   const hex = PRESET_COLOR_HEX[colorName] || "#888";
                   const isSelected = selectedColor === colorName;
+                  // Check per-style color stock — 0 = sold out for this color
+                  const colorStockMap = selectedType === "tee"
+                    ? ((dbProduct as any)?.tee_color_stock || {})
+                    : ((dbProduct as any)?.tank_color_stock || {});
+                  const hasColorStock = Object.keys(colorStockMap).length > 0;
+                  const colorStock = hasColorStock ? (colorStockMap[colorName] ?? 0) : Infinity;
+                  const colorOOS = colorStock !== Infinity && colorStock <= 0;
                   return (
                     <button
                       type="button"
                       key={colorName}
-                      title={colorName}
-                      onClick={() => setSelectedColor(isSelected ? null : colorName)}
+                      title={colorOOS ? `${colorName} — sold out` : colorName}
+                      disabled={colorOOS}
+                      onClick={() => !colorOOS && setSelectedColor(isSelected ? null : colorName)}
                       style={{
                         width: 34, height: 34, borderRadius: "50%",
                         background: hex,
                         border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))",
                         outline: isSelected ? "2px solid hsl(var(--primary))" : "none",
                         outlineOffset: 2,
-                        cursor: "pointer",
+                        cursor: colorOOS ? "not-allowed" : "pointer",
                         boxShadow: colorName === "White" ? "inset 0 0 0 1px #ccc" : "none",
                         position: "relative",
                         transition: "all 0.15s",
                         flexShrink: 0,
+                        opacity: colorOOS ? 0.5 : 1,
                       }}
                     >
-                      {isSelected && (
+                      {/* Diagonal cross-out line for sold out colors */}
+                      {colorOOS && (
+                        <svg viewBox="0 0 34 34" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", borderRadius: "50%", pointerEvents: "none" }}>
+                          <line x1="6" y1="6" x2="28" y2="28" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+                          <line x1="6" y1="6" x2="28" y2="28" stroke="rgba(0,0,0,0.4)" strokeWidth="1" strokeLinecap="round" />
+                        </svg>
+                      )}
+                      {isSelected && !colorOOS && (
                         <span style={{
                           position: "absolute", inset: 0, display: "flex",
                           alignItems: "center", justifyContent: "center",

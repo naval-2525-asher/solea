@@ -256,6 +256,81 @@ export default function AdminInventory() {
       toast.error("Missing DB columns — see setup note above.");
       return;
     }
+
+    const row = edits[id];
+    const product = (products as any[]).find((p) => p.id === id);
+    const total = row.stock_count;
+
+    // ── Color stock validation ──────────────────────────────────────────────
+    // Rule: if colors are set, their stock values must collectively equal the
+    // total stock — no more (oversell), no less (unexplained gap).
+    // Single color: can't exceed total. Multiple colors: must sum exactly to total.
+
+    const teeColorNames: string[] = product?.tee_colors || [];
+    const tankColorNames: string[] = product?.tank_colors || [];
+    const accessoryColorNames = Object.keys(row.color_stock || {});
+
+    // Tee colors check
+    if (teeColorNames.length > 0) {
+      const teeColorTotal = teeColorNames.reduce((s, c) => s + (row.tee_color_stock[c] ?? 0), 0);
+      if (teeColorNames.length === 1) {
+        if (teeColorTotal > total) {
+          toast.error(`Tee color "${teeColorNames[0]}" stock (${teeColorTotal}) exceeds total stock (${total}). Please reduce it.`);
+          return;
+        }
+      } else {
+        if (teeColorTotal > total) {
+          toast.error(`Tee colors add up to ${teeColorTotal} but total stock is only ${total}. They can't exceed the total.`);
+          return;
+        }
+        if (teeColorTotal < total) {
+          toast.error(`Tee colors only add up to ${teeColorTotal} but total stock is ${total}. All stock must be assigned across colors.`);
+          return;
+        }
+      }
+    }
+
+    // Tank colors check
+    if (tankColorNames.length > 0) {
+      const tankColorTotal = tankColorNames.reduce((s, c) => s + (row.tank_color_stock[c] ?? 0), 0);
+      if (tankColorNames.length === 1) {
+        if (tankColorTotal > total) {
+          toast.error(`Tank color "${tankColorNames[0]}" stock (${tankColorTotal}) exceeds total stock (${total}). Please reduce it.`);
+          return;
+        }
+      } else {
+        if (tankColorTotal > total) {
+          toast.error(`Tank colors add up to ${tankColorTotal} but total stock is only ${total}. They can't exceed the total.`);
+          return;
+        }
+        if (tankColorTotal < total) {
+          toast.error(`Tank colors only add up to ${tankColorTotal} but total stock is ${total}. All stock must be assigned across colors.`);
+          return;
+        }
+      }
+    }
+
+    // Accessory colors check
+    if (accessoryColorNames.length > 0) {
+      const accColorTotal = accessoryColorNames.reduce((s, c) => s + (row.color_stock[c] ?? 0), 0);
+      if (accessoryColorNames.length === 1) {
+        if (accColorTotal > total) {
+          toast.error(`Color "${accessoryColorNames[0]}" stock (${accColorTotal}) exceeds total stock (${total}). Please reduce it.`);
+          return;
+        }
+      } else {
+        if (accColorTotal > total) {
+          toast.error(`Colors add up to ${accColorTotal} but total stock is only ${total}. They can't exceed the total.`);
+          return;
+        }
+        if (accColorTotal < total) {
+          toast.error(`Colors only add up to ${accColorTotal} but total stock is ${total}. All stock must be assigned across colors.`);
+          return;
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     setSaving(id);
     try {
       const row = edits[id];
@@ -362,48 +437,80 @@ export default function AdminInventory() {
 
         {/* Tank by Color — uses tank_colors chosen in AdminProducts */}
         <td className="p-4 align-middle">
-          {getStyleColors(product, "tank").length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {getStyleColors(product, "tank").map((color: string) => {
-                const val = edit.tank_color_stock[color] ?? 0;
-                return (
-                <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                  <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
-                  <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
-                  <input type="number" min={0}
-                    value={val}
-                    onChange={(e) => updateColorStockByStyle(product.id, "tank", color, Number(e.target.value))}
-                    style={{ ...inputStyle, borderColor: val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
-                  />
-                </div>
-                );
-              })}
+          {getStyleColors(product, "tank").length > 0 ? (() => {
+            const tankColors = getStyleColors(product, "tank");
+            const colorSum = tankColors.reduce((s, c) => s + (edit.tank_color_stock[c] ?? 0), 0);
+            const isOver  = colorSum > edit.stock_count;
+            const isUnder = tankColors.length > 1 && colorSum < edit.stock_count;
+            return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {tankColors.map((color: string) => {
+                  const val = edit.tank_color_stock[color] ?? 0;
+                  return (
+                  <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
+                    <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
+                    <input type="number" min={0}
+                      value={val}
+                      onChange={(e) => updateColorStockByStyle(product.id, "tank", color, Number(e.target.value))}
+                      style={{ ...inputStyle, borderColor: isOver ? "#dc2626" : val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
+                    />
+                  </div>
+                  );
+                })}
+              </div>
+              {tankColors.length > 1 && (
+                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: isOver ? "#dc2626" : isUnder ? "#d97706" : "#16a34a" }}>
+                  {isOver ? `⚠ Total ${colorSum} exceeds stock ${edit.stock_count}` : isUnder ? `⚠ Total ${colorSum} of ${edit.stock_count}` : `✓ ${colorSum} / ${edit.stock_count}`}
+                </span>
+              )}
+              {tankColors.length === 1 && colorSum > edit.stock_count && (
+                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "#dc2626" }}>⚠ Exceeds total stock</span>
+              )}
             </div>
-          ) : (
+            );
+          })() : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
           )}
         </td>
 
         {/* Tee by Color — uses tee_colors chosen in AdminProducts */}
         <td className="p-4 align-middle">
-          {getStyleColors(product, "tee").length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {getStyleColors(product, "tee").map((color: string) => {
-                const val = edit.tee_color_stock[color] ?? 0;
-                return (
-                <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                  <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
-                  <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
-                  <input type="number" min={0}
-                    value={val}
-                    onChange={(e) => updateColorStockByStyle(product.id, "tee", color, Number(e.target.value))}
-                    style={{ ...inputStyle, borderColor: val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
-                  />
-                </div>
-                );
-              })}
+          {getStyleColors(product, "tee").length > 0 ? (() => {
+            const teeColors = getStyleColors(product, "tee");
+            const colorSum = teeColors.reduce((s, c) => s + (edit.tee_color_stock[c] ?? 0), 0);
+            const isOver  = colorSum > edit.stock_count;
+            const isUnder = teeColors.length > 1 && colorSum < edit.stock_count;
+            return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {teeColors.map((color: string) => {
+                  const val = edit.tee_color_stock[color] ?? 0;
+                  return (
+                  <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
+                    <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
+                    <input type="number" min={0}
+                      value={val}
+                      onChange={(e) => updateColorStockByStyle(product.id, "tee", color, Number(e.target.value))}
+                      style={{ ...inputStyle, borderColor: isOver ? "#dc2626" : val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
+                    />
+                  </div>
+                  );
+                })}
+              </div>
+              {teeColors.length > 1 && (
+                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: isOver ? "#dc2626" : isUnder ? "#d97706" : "#16a34a" }}>
+                  {isOver ? `⚠ Total ${colorSum} exceeds stock ${edit.stock_count}` : isUnder ? `⚠ Total ${colorSum} of ${edit.stock_count}` : `✓ ${colorSum} / ${edit.stock_count}`}
+                </span>
+              )}
+              {teeColors.length === 1 && colorSum > edit.stock_count && (
+                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "#dc2626" }}>⚠ Exceeds total stock</span>
+              )}
             </div>
-          ) : (
+            );
+          })() : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
           )}
         </td>
@@ -452,22 +559,40 @@ export default function AdminInventory() {
 
         {/* Style / color */}
         <td className="p-4 align-middle">
-          {colors.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {colors.map((color: string) => (
-                <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                  <span style={{ fontFamily: "Georgia, serif", fontSize: "0.6rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 52, textAlign: "center", lineHeight: 1.2 }}>
-                    {color}
-                  </span>
-                  <input type="number" min={0}
-                    value={edit.color_stock[color] ?? 0}
-                    onChange={(e) => updateColorStock(product.id, color, Number(e.target.value))}
-                    style={inputStyle}
-                  />
-                </div>
-              ))}
+          {colors.length > 0 ? (() => {
+            const colorSum = colors.reduce((s: number, c: string) => s + (edit.color_stock[c] ?? 0), 0);
+            const isOver  = colorSum > edit.stock_count;
+            const isUnder = colors.length > 1 && colorSum < edit.stock_count;
+            return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {colors.map((color: string) => {
+                  const val = edit.color_stock[color] ?? 0;
+                  return (
+                  <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <span style={{ fontFamily: "Georgia, serif", fontSize: "0.6rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 52, textAlign: "center", lineHeight: 1.2 }}>
+                      {color}
+                    </span>
+                    <input type="number" min={0}
+                      value={val}
+                      onChange={(e) => updateColorStock(product.id, color, Number(e.target.value))}
+                      style={{ ...inputStyle, borderColor: isOver ? "#dc2626" : val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
+                    />
+                  </div>
+                  );
+                })}
+              </div>
+              {colors.length > 1 && (
+                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: isOver ? "#dc2626" : isUnder ? "#d97706" : "#16a34a" }}>
+                  {isOver ? `⚠ Total ${colorSum} exceeds stock ${edit.stock_count}` : isUnder ? `⚠ Total ${colorSum} of ${edit.stock_count}` : `✓ ${colorSum} / ${edit.stock_count}`}
+                </span>
+              )}
+              {colors.length === 1 && colorSum > edit.stock_count && (
+                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "#dc2626" }}>⚠ Exceeds total stock</span>
+              )}
             </div>
-          ) : (
+            );
+          })() : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
           )}
         </td>
