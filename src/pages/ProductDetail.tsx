@@ -50,6 +50,7 @@ const ProductDetail = () => {
 
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"tee" | "tank">("tee");
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   useEffect(() => {
     setQuantity(1);
@@ -193,6 +194,16 @@ const ProductDetail = () => {
     variantGroups[v.label].push(v);
   });
 
+  // Per-style color circles — driven by admin's tee_colors / tank_colors picks
+  const PRESET_COLOR_HEX: Record<string, string> = {
+    Black: "#000000", White: "#FFFFFF", Red: "#DC2626",
+    Pink: "#F9A8D4", Yellow: "#FDE047", Blue: "#3B82F6",
+    Green: "#22C55E", Purple: "#A855F7", Other: "#D4A574",
+  };
+  const teeColors: string[] = (dbProduct as any)?.tee_colors || [];
+  const tankColors: string[] = (dbProduct as any)?.tank_colors || [];
+  const activeColors = selectedType === "tee" ? teeColors : tankColors;
+
   const extraPrice = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff || 0), 0);
   const displayPrice = (product.price || 0) + extraPrice;
 
@@ -207,6 +218,7 @@ const ProductDetail = () => {
 
   const handleTypeChange = (type: "tee" | "tank") => {
     setSelectedType(type);
+    setSelectedColor(null);
     const sizesForType = type === "tee" ? teeSizes : tankSizes;
     if (selectedSize && (!sizesForType.includes(selectedSize) || getStyleSizeStock(dbProduct, type, selectedSize) <= 0)) {
       setSelectedSize(null);
@@ -268,6 +280,7 @@ const ProductDetail = () => {
     Object.entries(selectedVariants).forEach(([label, opt]) => {
       customisation[label] = opt.name;
     });
+    if (selectedColor) customisation["Colour"] = selectedColor;
     // Add custom input values
     customInputs.forEach((ci) => {
       if (customValues[ci.id]) {
@@ -494,6 +507,53 @@ const ProductDetail = () => {
               </div>
               <div className="mb-7" />
             </>
+          )}
+
+          {/* Color circles — shown per active style (tee/tank), only if admin set any */}
+          {hasSizes && activeColors.length > 0 && (
+            <div style={{ marginBottom: "1.75rem" }}>
+              <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
+                Color
+                {selectedColor && (
+                  <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 8, fontSize: "0.78rem" }}>— {selectedColor}</span>
+                )}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                {activeColors.map((colorName) => {
+                  const hex = PRESET_COLOR_HEX[colorName] || "#888";
+                  const isSelected = selectedColor === colorName;
+                  return (
+                    <button
+                      type="button"
+                      key={colorName}
+                      title={colorName}
+                      onClick={() => setSelectedColor(isSelected ? null : colorName)}
+                      style={{
+                        width: 34, height: 34, borderRadius: "50%",
+                        background: hex,
+                        border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))",
+                        outline: isSelected ? "2px solid hsl(var(--primary))" : "none",
+                        outlineOffset: 2,
+                        cursor: "pointer",
+                        boxShadow: colorName === "White" ? "inset 0 0 0 1px #ccc" : "none",
+                        position: "relative",
+                        transition: "all 0.15s",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {isSelected && (
+                        <span style={{
+                          position: "absolute", inset: 0, display: "flex",
+                          alignItems: "center", justifyContent: "center",
+                          fontSize: 13, fontWeight: 900,
+                          color: ["White", "Yellow", "Pink"].includes(colorName) ? "#000" : "#fff",
+                        }}>✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Variant groups */}

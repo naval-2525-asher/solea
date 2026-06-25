@@ -237,6 +237,10 @@ export type Database = {
           color_stock: Json | null
           tee_variants: Json | null
           tank_variants: Json | null
+          tee_colors: string[] | null
+          tank_colors: string[] | null
+          tee_color_stock: Json | null
+          tank_color_stock: Json | null
           sizes: string[]
           stock_status: string
           updated_at: string
@@ -264,6 +268,10 @@ export type Database = {
           color_stock?: Json | null
           tee_variants?: Json | null
           tank_variants?: Json | null
+          tee_colors?: string[] | null
+          tank_colors?: string[] | null
+          tee_color_stock?: Json | null
+          tank_color_stock?: Json | null
           product_tags?: string[]
           sizes?: string[]
           stock_status?: string
@@ -292,6 +300,10 @@ export type Database = {
           color_stock?: Json | null
           tee_variants?: Json | null
           tank_variants?: Json | null
+          tee_colors?: string[] | null
+          tank_colors?: string[] | null
+          tee_color_stock?: Json | null
+          tank_color_stock?: Json | null
           product_tags?: string[]
           sizes?: string[]
           stock_status?: string

@@ -47,13 +47,28 @@ const getColorsFromVariants = (product: any): string[] => {
     .filter(Boolean);
 };
 
+// Get the admin-chosen color names for a given style from the new tee_colors / tank_colors fields
+const getStyleColors = (product: any, style: "tee" | "tank"): string[] => {
+  const field = style === "tee" ? "tee_colors" : "tank_colors";
+  const arr = product[field];
+  return Array.isArray(arr) ? arr : [];
+};
+
+const PRESET_COLOR_HEX: Record<string, string> = {
+  Black: "#000000", White: "#FFFFFF", Red: "#DC2626",
+  Pink: "#F9A8D4", Yellow: "#FDE047", Blue: "#3B82F6",
+  Green: "#22C55E", Purple: "#A855F7", Other: "#D4A574",
+};
+
 // Tee and Tank stock are tracked as two completely separate pools per size —
 // "Tee S" and "Tank S" must never share a number.
 type EditRow = {
-  stock_count:  number;
-  tee_stock:    Record<string, number>;
-  tank_stock:   Record<string, number>;
-  color_stock:  Record<string, number>;
+  stock_count:      number;
+  tee_stock:        Record<string, number>;
+  tank_stock:       Record<string, number>;
+  color_stock:      Record<string, number>;
+  tee_color_stock:  Record<string, number>;
+  tank_color_stock: Record<string, number>;
   stock_status: string;
 };
 
@@ -174,17 +189,25 @@ export default function AdminInventory() {
       if (isTee) TEE_SIZES.forEach((s) => { if (existingTeeStock[s] === undefined) existingTeeStock[s] = 0; });
       if (isTank) TANK_SIZES.forEach((s) => { if (existingTankStock[s] === undefined) existingTankStock[s] = 0; });
 
-      // Pre-populate color_stock from variants if empty
+      // Pre-populate color_stock from variants if empty (accessories)
       const colors = getColorsFromVariants(p);
       colors.forEach((c) => {
         if (existingColorStock[c] === undefined) existingColorStock[c] = 0;
       });
 
+      // Per-style color stock — keyed by the color names chosen in AdminProducts
+      const existingTeeColorStock: Record<string, number> = parseStockMap(p.tee_color_stock);
+      const existingTankColorStock: Record<string, number> = parseStockMap(p.tank_color_stock);
+      getStyleColors(p, "tee").forEach((c) => { if (existingTeeColorStock[c] === undefined) existingTeeColorStock[c] = 0; });
+      getStyleColors(p, "tank").forEach((c) => { if (existingTankColorStock[c] === undefined) existingTankColorStock[c] = 0; });
+
       init[p.id] = {
-        stock_count:  p.stock_count  ?? 0,
-        tee_stock:    existingTeeStock,
-        tank_stock:   existingTankStock,
-        color_stock:  existingColorStock,
+        stock_count:      p.stock_count  ?? 0,
+        tee_stock:        existingTeeStock,
+        tank_stock:       existingTankStock,
+        color_stock:      existingColorStock,
+        tee_color_stock:  existingTeeColorStock,
+        tank_color_stock: existingTankColorStock,
         stock_status: p.stock_status ?? "in_stock",
       };
     });
@@ -220,6 +243,14 @@ export default function AdminInventory() {
     }));
   };
 
+  const updateColorStockByStyle = (id: string, style: "tee" | "tank", color: string, value: number) => {
+    const field = style === "tee" ? "tee_color_stock" : "tank_color_stock";
+    setEdits((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: { ...prev[id][field], [color]: value } },
+    }));
+  };
+
   const handleSave = async (id: string) => {
     if (missingCols) {
       toast.error("Missing DB columns — see setup note above.");
@@ -231,11 +262,13 @@ export default function AdminInventory() {
       const { error } = await supabase
         .from("products")
         .update({
-          stock_count:   row.stock_count,
-          tee_variants:  row.tee_stock,
-          tank_variants: row.tank_stock,
-          color_stock:   row.color_stock,
-          stock_status:  row.stock_status,
+          stock_count:      row.stock_count,
+          tee_variants:     row.tee_stock,
+          tank_variants:    row.tank_stock,
+          color_stock:      row.color_stock,
+          tee_color_stock:  row.tee_color_stock,
+          tank_color_stock: row.tank_color_stock,
+          stock_status:     row.stock_status,
         } as any)
         .eq("id", id);
       if (error) throw error;
@@ -327,22 +360,48 @@ export default function AdminInventory() {
           )}
         </td>
 
-        {/* By color — pulled from variants */}
+        {/* Tank by Color — uses tank_colors chosen in AdminProducts */}
         <td className="p-4 align-middle">
-          {colors.length > 0 ? (
+          {getStyleColors(product, "tank").length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {colors.map((color: string) => (
+              {getStyleColors(product, "tank").map((color: string) => {
+                const val = edit.tank_color_stock[color] ?? 0;
+                return (
                 <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                  <span style={{ fontFamily: "Georgia, serif", fontSize: "0.6rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 50, textAlign: "center", lineHeight: 1.2 }}>
-                    {color}
-                  </span>
+                  <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
+                  <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
                   <input type="number" min={0}
-                    value={edit.color_stock[color] ?? 0}
-                    onChange={(e) => updateColorStock(product.id, color, Number(e.target.value))}
-                    style={inputStyle}
+                    value={val}
+                    onChange={(e) => updateColorStockByStyle(product.id, "tank", color, Number(e.target.value))}
+                    style={{ ...inputStyle, borderColor: val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
                   />
                 </div>
-              ))}
+                );
+              })}
+            </div>
+          ) : (
+            <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
+          )}
+        </td>
+
+        {/* Tee by Color — uses tee_colors chosen in AdminProducts */}
+        <td className="p-4 align-middle">
+          {getStyleColors(product, "tee").length > 0 ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {getStyleColors(product, "tee").map((color: string) => {
+                const val = edit.tee_color_stock[color] ?? 0;
+                return (
+                <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
+                  <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
+                  <input type="number" min={0}
+                    value={val}
+                    onChange={(e) => updateColorStockByStyle(product.id, "tee", color, Number(e.target.value))}
+                    style={{ ...inputStyle, borderColor: val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
+                  />
+                </div>
+                );
+              })}
             </div>
           ) : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
@@ -500,7 +559,8 @@ export default function AdminInventory() {
                     <span className="font-normal text-[10px] opacity-60">S · M · L · XL</span>
                   </div>
                 </th>
-                <th className="text-left p-4 text-muted-foreground font-medium">By Color</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">🎽 Tank by Color</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">👕 Tee by Color</th>
                 <th className="text-left p-4 text-muted-foreground font-medium">Status</th>
                 <th className="text-left p-4 text-muted-foreground font-medium">Save</th>
               </tr>
@@ -534,7 +594,8 @@ export default function AdminInventory() {
                     <span className="font-normal text-[10px] opacity-60">S · M · L · XL</span>
                   </div>
                 </th>
-                <th className="text-left p-4 text-muted-foreground font-medium">By Color</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">🎽 Tank by Color</th>
+                <th className="text-left p-4 text-muted-foreground font-medium">👕 Tee by Color</th>
                 <th className="text-left p-4 text-muted-foreground font-medium">Status</th>
                 <th className="text-left p-4 text-muted-foreground font-medium">Save</th>
               </tr>

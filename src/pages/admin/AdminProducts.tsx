@@ -54,6 +54,8 @@ const emptyProduct = {
   variants: [] as VariantOption[],
   tee_variants: [] as VariantOption[],
   tank_variants: [] as VariantOption[],
+  tee_colors: [] as string[],
+  tank_colors: [] as string[],
   custom_inputs: [] as CustomInput[],
   tee_custom_inputs: [] as CustomInput[],
   tank_custom_inputs: [] as CustomInput[],
@@ -134,6 +136,19 @@ function ProductCard({ p, onEdit, onDelete }: { p: any; onEdit: (p: any) => void
 type VField  = "variants"     | "tee_variants"     | "tank_variants";
 type CiField = "custom_inputs" | "tee_custom_inputs" | "tank_custom_inputs";
 
+// Predefined color palette for Tee / Tank color pickers
+const PRESET_COLORS: { name: string; hex: string }[] = [
+  { name: "Black",  hex: "#000000" },
+  { name: "White",  hex: "#FFFFFF" },
+  { name: "Red",    hex: "#DC2626" },
+  { name: "Pink",   hex: "#F9A8D4" },
+  { name: "Yellow", hex: "#FDE047" },
+  { name: "Blue",   hex: "#3B82F6" },
+  { name: "Green",  hex: "#22C55E" },
+  { name: "Purple", hex: "#A855F7" },
+];
+const OTHER_COLOR = { name: "Other", hex: "#D4A574" };
+
 export default function AdminProducts() {
   const { data: products = [], isLoading } = useProducts();
   const upsert    = useUpsertProduct();
@@ -198,7 +213,7 @@ export default function AdminProducts() {
   const openEdit = (p: any) => {
     const section = p.category === "Accessories" ? "accessories" : p.category === "Limited Edition" ? "limited" : "tees-tanks";
     setDialogSection(section);
-    setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], tee_variants: p.tee_variants || [], tank_variants: p.tank_variants || [], custom_inputs: p.custom_inputs || [], tee_custom_inputs: p.tee_custom_inputs || [], tank_custom_inputs: p.tank_custom_inputs || [], size_guide_tee: p.size_guide_tee || "/images/size-guide-tees.png", size_guide_tank: p.size_guide_tank || "/images/size-guide-tanks.jpg", tee_description: p.tee_description || "", tank_description: p.tank_description || "" });
+    setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], tee_variants: p.tee_variants || [], tank_variants: p.tank_variants || [], tee_colors: p.tee_colors || [], tank_colors: p.tank_colors || [], custom_inputs: p.custom_inputs || [], tee_custom_inputs: p.tee_custom_inputs || [], tank_custom_inputs: p.tank_custom_inputs || [], size_guide_tee: p.size_guide_tee || "/images/size-guide-tees.png", size_guide_tank: p.size_guide_tank || "/images/size-guide-tanks.jpg", tee_description: p.tee_description || "", tank_description: p.tank_description || "" });
     setVDraftStyle(null);
     setCiDraftStyle(null);
     setOpen(true);
@@ -624,14 +639,83 @@ export default function AdminProducts() {
                   </div>
                 </div>
               )}
-              {/* ── VARIANT OPTIONS ── */}
+              {/* ── COLOR OPTIONS (Tees & Tanks) ── */}
+              {dialogSection !== "accessories" && (
+                <div className="space-y-4">
+                  <SectionLabel>
+                    Color Options
+                    <span className="normal-case font-normal text-[10px]"> — choose separately for Tee and Tank</span>
+                  </SectionLabel>
+
+                  {(["tee", "tank"] as const).map((style) => {
+                    const field = style === "tee" ? "tee_colors" : "tank_colors";
+                    const chosen: string[] = editProduct[field] || [];
+                    const label = style === "tee" ? "👕 Tee Colors" : "🎽 Tank Colors";
+                    return (
+                      <div key={style} className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
+                        <p className="font-serif text-xs font-bold text-foreground">{label}</p>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {[...PRESET_COLORS, OTHER_COLOR].map((c) => {
+                            const active = chosen.includes(c.name);
+                            return (
+                              <button
+                                type="button"
+                                key={c.name}
+                                title={c.name}
+                                onClick={() => {
+                                  const next = active
+                                    ? chosen.filter((x) => x !== c.name)
+                                    : [...chosen, c.name];
+                                  setEditProduct({ ...editProduct, [field]: next });
+                                }}
+                                style={{
+                                  width: 30, height: 30, borderRadius: "50%",
+                                  background: c.hex,
+                                  border: active ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))",
+                                  outline: active ? "2px solid hsl(var(--primary))" : "none",
+                                  outlineOffset: 2,
+                                  cursor: "pointer",
+                                  boxShadow: c.name === "White" ? "inset 0 0 0 1px #ccc" : "none",
+                                  position: "relative",
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                {active && (
+                                  <span style={{
+                                    position: "absolute", inset: 0, display: "flex",
+                                    alignItems: "center", justifyContent: "center",
+                                    fontSize: 12, fontWeight: 900,
+                                    color: ["White", "Yellow", "Pink"].includes(c.name) ? "#000" : "#fff",
+                                  }}>✓</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {chosen.length > 0 && (
+                          <p className="font-serif text-[10px] text-muted-foreground">
+                            Selected: {chosen.join(", ")}
+                          </p>
+                        )}
+                        {chosen.length === 0 && (
+                          <p className="font-serif text-[10px] text-muted-foreground italic">
+                            None selected — no color circles will show on the product page
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ── VARIANT OPTIONS (Accessories only) ── */}
+              {dialogSection === "accessories" && (
               <div className="space-y-2">
                 <SectionLabel>
-                  {dialogSection === "accessories" ? "Style Options" : "Variant Options"}
+                  Style Options
                   <span className="normal-case font-normal text-[10px]"> — selectable choices (colour, style…)</span>
                 </SectionLabel>
 
-                {dialogSection === "accessories" && (
                   <div className="space-y-2">
                     <SectionLabel>Quick Style Presets</SectionLabel>
                     <div className="flex flex-wrap gap-2">
@@ -643,7 +727,6 @@ export default function AdminProducts() {
                       ))}
                     </div>
                   </div>
-                )}
 
                 {(editProduct.variants || []).length > 0 && (
                   <div className="space-y-1.5">
@@ -684,6 +767,7 @@ export default function AdminProducts() {
                   </div>
                 </div>
               </div>
+              )}
 
               {/* ── CUSTOM INPUT FIELDS ── */}
               <div className="space-y-2">
