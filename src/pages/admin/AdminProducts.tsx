@@ -157,11 +157,13 @@ export default function AdminProducts() {
 
   // Refs for scrolling to sections
   const teesTanksRef   = useRef<HTMLDivElement>(null);
+  const limitedRef     = useRef<HTMLDivElement>(null);
   const accessoriesRef = useRef<HTMLDivElement>(null);
 
   // Scroll to section when hash changes
   useEffect(() => {
     const el = hash === "#tees-tanks" ? teesTanksRef.current
+             : hash === "#limited"    ? limitedRef.current
              : hash === "#accessories" ? accessoriesRef.current
              : null;
     if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
@@ -420,7 +422,7 @@ export default function AdminProducts() {
       <div className="border-t border-border" />
 
       {/* ── Limited Edition section ── */}
-      <div className="scroll-mt-6 space-y-4">
+      <div ref={limitedRef} className="scroll-mt-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="font-serif text-xl font-black text-foreground">✨ Limited Edition</h2>
