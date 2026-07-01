@@ -184,7 +184,8 @@ export default function AdminOverview() {
               <XAxis dataKey="month" tick={{ fontFamily: "Georgia", fontSize: 12 }} />
               <YAxis
                 tick={{ fontFamily: "Georgia", fontSize: 12 }}
-                tickFormatter={(v) => isPK ? `${(v / 1000).toFixed(0)}k` : `£${v}`}
+                ticks={isPK ? [0, 50000, 100000, 150000, 200000] : [0, 200, 400, 600, 800, 1000]}
+                tickFormatter={(v) => isPK ? (v === 0 ? "0" : `${v / 1000}k`) : (v === 0 ? "0" : `£${v}`)}
               />
               <Tooltip
                 formatter={(value: number) => [formatAmt(value), "Revenue"]}
