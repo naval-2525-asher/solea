@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useSaleProducts } from "@/hooks/useAdminData";
+import { useSaleProducts, useSiteSettings } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useRegion } from "@/context/RegionContext";
@@ -87,7 +87,12 @@ const SaleCard = ({ item }: { item: any }) => {
 
 const Sale = () => {
   const { data: saleItems = [], isLoading } = useSaleProducts();
+  const { data: settings = [] } = useSiteSettings();
+  const isLive = (settings as any[]).find((s: any) => s.key === "sale_live")?.value === "true";
   const activeSaleItems = saleItems.filter((s: any) => s.products);
+
+  // Sale is off — show a friendly message instead of products
+  const showEmpty = !isLoading && (!isLive || activeSaleItems.length === 0);
 
   return (
     <main className="min-h-screen">
@@ -112,17 +117,20 @@ const Sale = () => {
               </div>
             ))}
           </div>
-        ) : activeSaleItems.length > 0 ? (
+        ) : showEmpty ? (
+          <div style={{ textAlign: "center", padding: "80px 20px" }}>
+            <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "clamp(18px, 4vw, 28px)", fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 12px" }}>
+              No items on sale right now
+            </p>
+            <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "clamp(13px, 2.5vw, 16px)", color: "hsl(var(--muted-foreground))", margin: 0 }}>
+              Stay tuned! Some special discounts are coming soon 🌸
+            </p>
+          </div>
+        ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {activeSaleItems.map((item: any) => (
               <SaleCard key={item.id} item={item} />
             ))}
-          </div>
-        ) : (
-          <div style={{ minHeight: "40vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-            <p style={{ fontFamily: "Georgia, serif", fontSize: "1rem", color: "hsl(var(--muted-foreground))" }}>
-              No sale products right now — check back soon!
-            </p>
           </div>
         )}
       </div>
