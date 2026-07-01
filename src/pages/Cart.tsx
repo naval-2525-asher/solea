@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useCart, cartItemKey } from "@/context/CartContext";
+import { useCart, cartItemKey, CartItem } from "@/context/CartContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Minus, Plus, Trash2, AlertTriangle } from "lucide-react";
@@ -9,17 +9,16 @@ import { toast } from "sonner";
 import { getEffectiveStock, isProductManuallyOOS } from "@/lib/inventory";
 
 const Cart = () => {
-  const { items, updateQuantity, removeFromCart, totalPrice } = useCart();
+  const { items, updateQuantity, removeFromCart, totalPrice, totalPriceGbp } = useCart();
   const { data: products = [] } = useProducts();
   const { regionConfig } = useRegion();
+  const isUK = regionConfig.code === "UK";
 
   // Build a product lookup map: id → product row
   const productMap = new Map(
     (products as any[]).map((p: any) => [String(p.id), p])
   );
 
-  // Effective stock for THIS exact cart line — Tee S, Tank S, and an
-  // Accessory's colour/style variant are each their own pool.
   const getStock = (item: { productId: number | string; size: string; style: string }): number => {
     const p = productMap.get(String(item.productId));
     if (!p) return Infinity;
@@ -34,12 +33,18 @@ const Cart = () => {
     return stock !== Infinity && stock <= 0;
   };
 
+  // Get the display price for a cart item in the current region
+  const getItemDisplayPrice = (item: CartItem): number => {
+    if (isUK && item.priceGbp != null) return item.priceGbp;
+    return item.price;
+  };
+
   const formatCartPrice = (price: number) => {
-    if (regionConfig.code === "UK") {
-      return `£${price.toLocaleString("en-GB")}`;
-    }
+    if (isUK) return `£${price.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     return `Rs. ${price.toLocaleString()}`;
   };
+
+  const displayTotal = isUK && totalPriceGbp != null ? totalPriceGbp : totalPrice;
 
   // Check for any stock issues across cart
   const stockIssues = items.filter((item) => {
@@ -184,7 +189,7 @@ const Cart = () => {
                   )}
 
                   <p className="text-foreground font-serif font-bold text-sm mt-1.5">
-                    {formatCartPrice(item.price)}
+                    {formatCartPrice(getItemDisplayPrice(item))}
                   </p>
 
                   <div className="flex items-center gap-3 mt-2">
@@ -241,11 +246,11 @@ const Cart = () => {
         <div className="border-t border-border pt-6 space-y-2">
           <div className="flex justify-between font-serif text-sm text-foreground/70">
             <span>Estimated Total</span>
-            <span>{formatCartPrice(totalPrice)}</span>
+            <span>{formatCartPrice(displayTotal)}</span>
           </div>
           <div className="flex justify-between font-serif text-lg font-black text-foreground">
             <span>Total</span>
-            <span>{formatCartPrice(totalPrice)}</span>
+            <span>{formatCartPrice(displayTotal)}</span>
           </div>
         </div>
 

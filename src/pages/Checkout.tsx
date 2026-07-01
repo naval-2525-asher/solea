@@ -50,12 +50,20 @@ const formatPhone = (value: string, isUK: boolean) => {
 };
 
 const Checkout = () => {
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, totalPriceGbp, clearCart } = useCart();
   const navigate = useNavigate();
   const { region } = useRegion();
   const isUK = region === "UK";
   const insertOrder = useInsertOrder();
   const { data: allProducts = [] } = useProducts();
+
+  // Use GBP price when UK and available, else PKR
+  const getItemPrice = (item: any): number => {
+    if (isUK && item.priceGbp != null) return item.priceGbp;
+    return item.price;
+  };
+
+  const displayTotalPrice = isUK && totalPriceGbp != null ? totalPriceGbp : totalPrice;
 
   const formatPrice = (price: number) =>
     isUK
@@ -78,8 +86,8 @@ const Checkout = () => {
   const [ukAcknowledged, setUkAcknowledged] = useState(false);
 
   const city = form.city === "Other" ? form.cityOther : form.city;
-  const delivery = getDelivery(region, city, totalPrice);
-  const grandTotal = totalPrice + delivery;
+  const delivery = getDelivery(region, city, displayTotalPrice);
+  const grandTotal = displayTotalPrice + delivery;
   const paymentDone = txnImage !== null;
   const deliveryMsg = delivery === 0
     ? "🎉 Free delivery!"
@@ -216,7 +224,7 @@ const Checkout = () => {
           size: item.size,
           color: item.customisation?.Colour ?? null,
           quantity: item.quantity,
-          price: item.price,
+          price: getItemPrice(item),
           style: item.style,
           customisation: item.customisation ?? {},
         })),
@@ -451,7 +459,7 @@ const Checkout = () => {
                     )}
                   </div>
                   <span className="text-foreground font-bold ml-4 flex-shrink-0">
-                    {formatPrice(item.price * item.quantity)}
+                    {formatPrice(getItemPrice(item) * item.quantity)}
                   </span>
                 </div>
               );
@@ -460,7 +468,7 @@ const Checkout = () => {
           <div className="border-t border-border my-3" />
           <div className="flex justify-between font-serif text-sm text-foreground/70 mb-1">
             <span>Subtotal</span>
-            <span>{formatPrice(totalPrice)}</span>
+            <span>{formatPrice(displayTotalPrice)}</span>
           </div>
           <div className="flex justify-between font-serif text-sm text-foreground/70 mb-3">
             <span>Delivery</span>
@@ -472,7 +480,7 @@ const Checkout = () => {
           </div>
           {delivery > 0 && (
             <p className="font-serif text-xs text-foreground/50 mt-1 text-right">
-              Add {isUK ? `£${(80 - totalPrice).toFixed(2)} more` : `PKR ${(10000 - totalPrice).toLocaleString()} more`} for free delivery
+              Add {isUK ? `£${(80 - displayTotalPrice).toFixed(2)} more` : `PKR ${(10000 - displayTotalPrice).toLocaleString()} more`} for free delivery
             </p>
           )}
         </div>

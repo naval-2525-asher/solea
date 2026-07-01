@@ -4,12 +4,11 @@ export interface CartItem {
   productId: number | string;
   name: string;
   image: string;
-  price: number;
+  price: number;       // PKR price — always stored
+  priceGbp?: number;  // GBP price — stored when available
   size: string;
   style: "tee" | "tank" | "accessory";
   quantity: number;
-  // Stores all selected customisation as key→value pairs
-  // e.g. { "Colour": "Blush Pink", "Text": "Hello", "Date": "2025-01-01" }
   customisation?: Record<string, string>;
 }
 
@@ -21,6 +20,7 @@ interface CartContextType {
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
+  totalPriceGbp: number | null;
 }
 
 // Stable key for deduplication — includes customisation JSON
@@ -71,9 +71,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  // null if any item is missing a GBP price
+  const totalPriceGbp = items.every((i) => i.priceGbp != null)
+    ? items.reduce((sum, i) => sum + (i.priceGbp ?? 0) * i.quantity, 0)
+    : null;
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice }}>
+    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, totalPriceGbp }}>
       {children}
     </CartContext.Provider>
   );

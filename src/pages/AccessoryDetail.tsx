@@ -132,6 +132,15 @@ const AccessoryDetail = () => {
   };
 
   const basePrice = product.price;
+  const gbpPrice: number | null = (dbProduct as any)?.price_gbp && Number((dbProduct as any).price_gbp) > 0
+    ? Number((dbProduct as any).price_gbp) : null;
+
+  // Safe region price — never use the PKR number with a £ sign
+  const getRegionPrice = (pkrBase: number): number | null => {
+    if (region === "UK") return gbpPrice; // null if not set
+    return pkrBase;
+  };
+
   const selectedVariantObj = product.variants.find((v: any) => v.name === selectedVariant);
   const singleTotal = (basePrice + (selectedVariantObj?.price_diff || 0)) * qty;
   const multiTotal = isMultiSelect
@@ -203,15 +212,22 @@ const AccessoryDetail = () => {
       selectedMulti.forEach((variantName) => {
         const variantPriceDiff = product.variants.find((v: any) => v.name === variantName)?.price_diff || 0;
         // Use sale price if available (sale price overrides the base; variant diff still applies on top)
-        const effectiveBase = activeSalePrice !== null
-          ? (region === "UK" && activeSalePriceGbp ? activeSalePriceGbp : activeSalePrice)
-          : (region === "UK" && (dbProduct as any)?.price_gbp ? Number((dbProduct as any).price_gbp) : basePrice);
+        const saleGbp = activeSalePriceGbp && activeSalePriceGbp > 0 ? activeSalePriceGbp : null;
+        const effectiveBaseRaw = activeSalePrice !== null
+          ? (region === "UK" ? saleGbp : activeSalePrice)
+          : getRegionPrice(basePrice);
+        if (effectiveBaseRaw === null) {
+          toast({ title: "GBP price not set for this product. Please contact us.", variant: "destructive" });
+          return;
+        }
+        const effectiveBase = effectiveBaseRaw;
         for (let i = 0; i < qty; i++) {
           addToCart({
             productId: productIdForCart,
             name: product.name,
             image: allImages[0] || product.image,
-            price: effectiveBase + variantPriceDiff,
+            price: activeSalePrice !== null ? activeSalePrice + variantPriceDiff : basePrice + variantPriceDiff,
+            priceGbp: gbpPrice ? (effectiveBase + variantPriceDiff) : undefined,
             size: variantName,
             style: "accessory",
             customisation: { Style: variantName },
@@ -235,15 +251,22 @@ const AccessoryDetail = () => {
         return;
       }
       const variantPriceDiff = selectedVariantObj?.price_diff || 0;
-      const effectiveBaseForVariant = activeSalePrice !== null
-        ? (region === "UK" && activeSalePriceGbp ? activeSalePriceGbp : activeSalePrice)
-        : (region === "UK" && (dbProduct as any)?.price_gbp ? Number((dbProduct as any).price_gbp) : basePrice);
+      const saleGbpV = activeSalePriceGbp && activeSalePriceGbp > 0 ? activeSalePriceGbp : null;
+      const effectiveBaseForVariantRaw = activeSalePrice !== null
+        ? (region === "UK" ? saleGbpV : activeSalePrice)
+        : getRegionPrice(basePrice);
+      if (effectiveBaseForVariantRaw === null) {
+        toast({ title: "GBP price not set for this product. Please contact us.", variant: "destructive" });
+        return;
+      }
+      const effectiveBaseForVariant = effectiveBaseForVariantRaw;
       for (let i = 0; i < qty; i++) {
         addToCart({
           productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
-          price: effectiveBaseForVariant + variantPriceDiff,
+          price: activeSalePrice !== null ? activeSalePrice + variantPriceDiff : basePrice + variantPriceDiff,
+          priceGbp: gbpPrice ? (effectiveBaseForVariant + variantPriceDiff) : undefined,
           size: selectedVariant,
           style: "accessory",
           customisation: { Style: selectedVariant },
@@ -259,15 +282,22 @@ const AccessoryDetail = () => {
         toast({ title: `Only ${totalRemaining} available`, variant: "destructive" });
         return;
       }
-      const effectiveBaseNoVariant = activeSalePrice !== null
-        ? (region === "UK" && activeSalePriceGbp ? activeSalePriceGbp : activeSalePrice)
-        : (region === "UK" && (dbProduct as any)?.price_gbp ? Number((dbProduct as any).price_gbp) : basePrice);
+      const saleGbpNV = activeSalePriceGbp && activeSalePriceGbp > 0 ? activeSalePriceGbp : null;
+      const effectiveBaseNoVariantRaw = activeSalePrice !== null
+        ? (region === "UK" ? saleGbpNV : activeSalePrice)
+        : getRegionPrice(basePrice);
+      if (effectiveBaseNoVariantRaw === null) {
+        toast({ title: "GBP price not set for this product. Please contact us.", variant: "destructive" });
+        return;
+      }
+      const effectiveBaseNoVariant = effectiveBaseNoVariantRaw;
       for (let i = 0; i < qty; i++) {
         addToCart({
           productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
-          price: effectiveBaseNoVariant,
+          price: activeSalePrice !== null ? activeSalePrice : basePrice,
+          priceGbp: gbpPrice ? effectiveBaseNoVariant : undefined,
           size: "One Size",
           style: "accessory",
         });

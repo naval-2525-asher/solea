@@ -288,16 +288,31 @@ const ProductDetail = () => {
       }
     });
 
+    const gbpBase = (dbProduct as any)?.price_gbp && Number((dbProduct as any).price_gbp) > 0
+      ? Number((dbProduct as any).price_gbp) : null;
+    const saleGbpBase = salePriceGbp && salePriceGbp > 0 ? salePriceGbp : null;
+
     const regionPrice = region === "UK"
-      ? (salePriceGbp ?? (((dbProduct as any)?.price_gbp ?? 0) + extraPrice))
+      ? (saleGbpBase ?? gbpBase)
       : (salePrice ?? displayPrice);
+
+    if (region === "UK" && regionPrice === null) {
+      toast.error("GBP price not set for this product. Please contact us.");
+      return;
+    }
+
+    // Always store PKR as the canonical price; store GBP separately so
+    // Cart/Checkout can show the right currency without re-fetching.
+    const pkrPrice = salePrice ?? displayPrice;
+    const gbpCartPrice = saleGbpBase ?? gbpBase ?? undefined;
 
     for (let i = 0; i < quantity; i++) {
       addToCart({
         productId: (dbProduct as any)?.id ?? (typeof product.id === "number" ? product.id : 9999),
         name: product.name,
         image: allImages[0] || (product as any).image || "",
-        price: regionPrice,
+        price: pkrPrice,
+        priceGbp: gbpCartPrice,
         size: selectedSize || "One Size",
         style: hasSizes ? effectiveType : "tee",
         customisation: Object.keys(customisation).length > 0 ? customisation : undefined,
@@ -422,13 +437,15 @@ const ProductDetail = () => {
             <div className="flex items-center gap-3 mb-8">
               <p className="text-foreground font-serif text-2xl font-bold">
                 {region === "UK"
-                  ? salePriceGbp
+                  ? salePriceGbp && salePriceGbp > 0
                     ? `£${salePriceGbp.toLocaleString("en-GB")}`
-                    : `£${(((dbProduct as any)?.price_gbp ?? 0) + extraPrice).toLocaleString("en-GB")}`
+                    : (dbProduct as any)?.price_gbp && Number((dbProduct as any).price_gbp) > 0
+                      ? `£${(Number((dbProduct as any).price_gbp) + extraPrice).toLocaleString("en-GB")}`
+                      : `Rs. ${salePrice.toLocaleString()} (GBP price not set)`
                   : `Rs. ${salePrice.toLocaleString()}`}
               </p>
               <p className="font-serif text-lg" style={{ textDecoration: "line-through", opacity: 0.45 }}>
-                {formatPrice(displayPrice, (dbProduct as any)?.price_gbp ?? 0)}
+                {formatPrice(displayPrice, (dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0 ? Number((dbProduct as any)?.price_gbp) : undefined)}
               </p>
               {discount !== null && (
                 <span style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "3px 10px", borderRadius: "2rem" }}>
@@ -438,7 +455,9 @@ const ProductDetail = () => {
             </div>
           ) : (
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
-              {formatPrice(displayPrice, ((dbProduct as any)?.price_gbp ?? 0) + extraPrice)}
+              {region === "UK" && !((dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0)
+                ? `Rs. ${displayPrice.toLocaleString()} (GBP price not set)`
+                : formatPrice(displayPrice, (dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0 ? Number((dbProduct as any)?.price_gbp) + extraPrice : undefined)}
               {extraPrice > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPrice.toLocaleString()} for selected option)</span>}
               {extraPrice > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPrice.toLocaleString("en-GB")} for selected option)</span>}
             </p>
