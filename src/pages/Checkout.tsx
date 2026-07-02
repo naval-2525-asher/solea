@@ -403,10 +403,10 @@ const Checkout = () => {
           {isUK ? (
             <>
               <p className="text-foreground/80 font-serif text-sm leading-relaxed">
-                UK payments are processed via bank transfer. Please contact us at <span className="font-bold">shopsoleakhi@gmail.com</span> to arrange payment before completing your order.
+                UK orders are paid via bank transfer. Please contact us at <span className="font-bold">shopsoleakhi@gmail.com</span> before completing your order so we can provide payment details and confirm your order total.
               </p>
               <div className="mt-4 bg-secondary/40 rounded-xl p-4 font-serif text-sm text-foreground/70">
-                <p>All prices are in <span className="font-bold text-foreground">GBP (£)</span>. Your order total will be confirmed via email.</p>
+                <p>All prices are listed in <span className="font-bold text-foreground">GBP (£)</span>. Your final order total, including shipping (if applicable), will be confirmed by email.</p>
               </div>
             </>
           ) : (

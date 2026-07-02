@@ -243,7 +243,7 @@ const Shop = () => {
             onSortChange={setSortBy}
             onFiltersApply={setFilters}
             hasFiltersApplied={hasFiltersApplied}
-            showSizeFilter={true}
+            showSizeFilter={false}
             viewMode={viewMode}
             onViewModeChange={handleViewModeChange}
           />
