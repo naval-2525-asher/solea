@@ -6,17 +6,36 @@ import { supabase } from "@/integrations/supabase/client";
 
 const ADMIN_EMAIL = "shopsoleakhi@gmail.com";
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const PENDING_KEY = "admin_pw_change_pending";
 
 function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+type Pending = { code: string; expiresAt: number; password: string };
+
+function loadPending(): Pending | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const parsed: Pending = JSON.parse(raw);
+    if (!parsed?.expiresAt || Date.now() > parsed.expiresAt) {
+      sessionStorage.removeItem(PENDING_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminSettings() {
-  const [step, setStep] = useState<"form" | "verify">("form");
+  const initialPending = loadPending();
+  const [step, setStep] = useState<"form" | "verify">(initialPending ? "verify" : "form");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [code, setCode] = useState("");
-  const [pending, setPending] = useState<{ code: string; expiresAt: number; password: string } | null>(null);
+  const [pending, setPending] = useState<Pending | null>(initialPending);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -28,6 +47,7 @@ export default function AdminSettings() {
     setCode("");
     setPending(null);
     setError("");
+    sessionStorage.removeItem(PENDING_KEY);
   };
 
   const sendVerificationCode = async (passwordToSet: string) => {
@@ -43,7 +63,9 @@ export default function AdminSettings() {
           code: verificationCode,
         },
       });
-      setPending({ code: verificationCode, expiresAt: Date.now() + CODE_TTL_MS, password: passwordToSet });
+      const next: Pending = { code: verificationCode, expiresAt: Date.now() + CODE_TTL_MS, password: passwordToSet };
+      sessionStorage.setItem(PENDING_KEY, JSON.stringify(next));
+      setPending(next);
       setStep("verify");
     } catch (err) {
       console.error("Failed to send verification email:", err);
