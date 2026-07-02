@@ -256,17 +256,21 @@ export default function AdminOrders() {
                                 </p>
                                 <div className="pt-1">
                                   <p className="text-xs font-bold text-foreground mb-1">Items:</p>
-                                  {(order.items || []).map((item: any, i: number) => (
-                                    <p key={i} className="text-xs text-foreground/80 pl-2">
-                                      • {item.name}
-                                      {item.color ? ` · ${item.color}` : ""}
-                                      {item.size ? ` · ${item.size}` : ""}
-                                      {" × "}{item.quantity} —{" "}
-                                      {order.region === "UK"
-                                        ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`
-                                        : `PKR ${(item.price * item.quantity).toLocaleString()}`}
-                                    </p>
-                                  ))}
+                                  {(order.items || []).map((item: any, i: number) => {
+                                    const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : item.style === "tank" ? "Tank" : null;
+                                    return (
+                                      <p key={i} className="text-xs text-foreground/80 pl-2">
+                                        • {item.name}
+                                        {typeLabel ? ` · ${typeLabel}` : ""}
+                                        {item.color ? ` · ${item.color}` : ""}
+                                        {item.size ? ` · ${item.size}` : ""}
+                                        {" × "}{item.quantity} —{" "}
+                                        {order.region === "UK"
+                                          ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`
+                                          : `PKR ${(item.price * item.quantity).toLocaleString()}`}
+                                      </p>
+                                    );
+                                  })}
                                 </div>
                               </div>
 

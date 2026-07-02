@@ -1,6 +1,89 @@
-import { Mail, Info, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Mail, Info, CheckCircle2, KeyRound } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+
+const ADMIN_EMAIL = "shopsoleakhi@gmail.com";
+const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function generateCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 
 export default function AdminSettings() {
+  const [step, setStep] = useState<"form" | "verify">("form");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [pending, setPending] = useState<{ code: string; expiresAt: number; password: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const resetFlow = () => {
+    setStep("form");
+    setNewPassword("");
+    setConfirmPassword("");
+    setCode("");
+    setPending(null);
+    setError("");
+  };
+
+  const sendVerificationCode = async (passwordToSet: string) => {
+    setError("");
+    setSuccess("");
+    setSending(true);
+    const verificationCode = generateCode();
+    try {
+      await supabase.functions.invoke("send-order-emails", {
+        body: {
+          type: "admin_password_verification",
+          email: ADMIN_EMAIL,
+          code: verificationCode,
+        },
+      });
+      setPending({ code: verificationCode, expiresAt: Date.now() + CODE_TTL_MS, password: passwordToSet });
+      setStep("verify");
+    } catch (err) {
+      console.error("Failed to send verification email:", err);
+      setError("Couldn't send the verification email. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleRequestChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (newPassword.length < 4) {
+      setError("Password must be at least 4 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    sendVerificationCode(newPassword);
+  };
+
+  const handleVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!pending) return;
+    if (Date.now() > pending.expiresAt) {
+      setError("This code has expired. Please request a new one.");
+      return;
+    }
+    if (code.trim() !== pending.code) {
+      setError("Incorrect code. Please check your email and try again.");
+      return;
+    }
+    localStorage.setItem("admin_password", pending.password);
+    setSuccess("Password updated successfully.");
+    resetFlow();
+  };
+
   return (
     <div className="space-y-8 max-w-2xl">
       <h1 className="font-serif text-2xl font-black text-foreground">Settings</h1>
@@ -59,6 +142,77 @@ export default function AdminSettings() {
             <code className="bg-secondary px-1 rounded">RESEND_API_KEY</code> is set in your Supabase project secrets. For all other status updates, use the pre-filled email templates in the <strong>Orders</strong> panel.
           </p>
         </div>
+      </div>
+
+      {/* Change Password */}
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
+            <KeyRound size={18} className="text-blue-600" />
+          </div>
+          <div>
+            <h2 className="font-serif font-black text-foreground text-lg leading-tight">Change Password</h2>
+            <p className="font-serif text-xs text-muted-foreground">
+              A verification code will be emailed to {ADMIN_EMAIL}
+            </p>
+          </div>
+        </div>
+
+        {step === "form" ? (
+          <form onSubmit={handleRequestChange} className="space-y-3">
+            <Input
+              type="password"
+              placeholder="New password"
+              value={newPassword}
+              onChange={(e) => { setNewPassword(e.target.value); setError(""); }}
+              className="font-serif"
+            />
+            <Input
+              type="password"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
+              className="font-serif"
+            />
+            {error && <p className="text-destructive font-serif text-xs">{error}</p>}
+            {success && <p className="text-blue-600 font-serif text-xs">{success}</p>}
+            <Button type="submit" disabled={sending} className="font-serif font-bold">
+              {sending ? "Sending code…" : "Send Verification Code"}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerify} className="space-y-3">
+            <p className="font-serif text-xs text-muted-foreground leading-relaxed">
+              Enter the 6-digit code sent to <strong className="text-foreground">{ADMIN_EMAIL}</strong> to confirm your new password.
+            </p>
+            <Input
+              placeholder="Verification code"
+              value={code}
+              onChange={(e) => { setCode(e.target.value); setError(""); }}
+              className="font-serif tracking-widest"
+              maxLength={6}
+            />
+            {error && <p className="text-destructive font-serif text-xs">{error}</p>}
+            <div className="flex items-center gap-3">
+              <Button type="submit" className="font-serif font-bold">Verify &amp; Update Password</Button>
+              <button
+                type="button"
+                onClick={() => pending && sendVerificationCode(pending.password)}
+                disabled={sending}
+                className="font-serif text-xs text-muted-foreground underline"
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
+                onClick={resetFlow}
+                className="font-serif text-xs text-muted-foreground underline"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Admin Contact */}

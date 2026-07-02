@@ -13,7 +13,8 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "superadmin" && password === "1122") {
+    const storedPassword = localStorage.getItem("admin_password") || "1122";
+    if (username === "superadmin" && password === storedPassword) {
       sessionStorage.setItem("admin_logged_in", "true");
       onLogin();
     } else {

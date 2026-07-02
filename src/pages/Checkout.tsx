@@ -435,6 +435,7 @@ const Checkout = () => {
               const isOOS = available !== Infinity && available <= 0;
               const exceedsStock = !isOOS && available !== Infinity && item.quantity > available;
               const colour = item.customisation?.Colour;
+              const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : "Tank";
 
               return (
                 <div
@@ -444,6 +445,7 @@ const Checkout = () => {
                   <div className="flex flex-col gap-0.5">
                     <span className={`text-foreground ${exceedsStock || isOOS ? "text-destructive" : ""}`}>
                       {item.name}
+                      {typeLabel ? ` · ${typeLabel}` : ""}
                       {colour ? ` · ${colour}` : ""}
                       {" · "}{item.size} × {item.quantity}
                     </span>
