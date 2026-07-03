@@ -109,7 +109,7 @@ export default function AdminSettings() {
         .eq("id", 1);
       if (updateError) {
         console.error("Failed to update password:", updateError);
-        setError("Couldn't save the new password. Please try again.");
+        setError(`Couldn't save the new password: ${updateError.message || "unknown error"}`);
         return;
       }
       setSuccess("Password updated successfully.");
