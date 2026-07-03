@@ -89,7 +89,7 @@ export default function AdminSettings() {
     sendVerificationCode(newPassword);
   };
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!pending) return;
@@ -101,9 +101,22 @@ export default function AdminSettings() {
       setError("Incorrect code. Please check your email and try again.");
       return;
     }
-    localStorage.setItem("admin_password", pending.password);
-    setSuccess("Password updated successfully.");
-    resetFlow();
+    setSending(true);
+    try {
+      const { error: updateError } = await (supabase as any)
+        .from("admin_settings")
+        .update({ admin_password: pending.password, updated_at: new Date().toISOString() })
+        .eq("id", 1);
+      if (updateError) {
+        console.error("Failed to update password:", updateError);
+        setError("Couldn't save the new password. Please try again.");
+        return;
+      }
+      setSuccess("Password updated successfully.");
+      resetFlow();
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -216,7 +229,9 @@ export default function AdminSettings() {
             />
             {error && <p className="text-destructive font-serif text-xs">{error}</p>}
             <div className="flex items-center gap-3">
-              <Button type="submit" className="font-serif font-bold">Verify &amp; Update Password</Button>
+              <Button type="submit" disabled={sending} className="font-serif font-bold">
+                {sending ? "Saving…" : "Verify & Update Password"}
+              </Button>
               <button
                 type="button"
                 onClick={() => pending && sendVerificationCode(pending.password)}

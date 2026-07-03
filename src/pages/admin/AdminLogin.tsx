@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AdminLoginProps {
   onLogin: () => void;
@@ -10,15 +11,30 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const storedPassword = localStorage.getItem("admin_password") || "1122";
-    if (username === "superadmin" && password === storedPassword) {
-      sessionStorage.setItem("admin_logged_in", "true");
-      onLogin();
-    } else {
-      setError("Invalid username or password");
+    setError("");
+    setChecking(true);
+    try {
+      let storedPassword = "1122";
+      const { data, error: fetchError } = await (supabase as any)
+        .from("admin_settings")
+        .select("admin_password")
+        .eq("id", 1)
+        .maybeSingle();
+      if (!fetchError && data?.admin_password) {
+        storedPassword = data.admin_password;
+      }
+      if (username === "superadmin" && password === storedPassword) {
+        sessionStorage.setItem("admin_logged_in", "true");
+        onLogin();
+      } else {
+        setError("Invalid username or password");
+      }
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -59,8 +75,8 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
           <p className="text-destructive font-serif text-sm">{error}</p>
         )}
 
-        <Button type="submit" className="w-full font-serif font-bold">
-          Sign In
+        <Button type="submit" disabled={checking} className="w-full font-serif font-bold">
+          {checking ? "Checking…" : "Sign In"}
         </Button>
       </form>
     </div>
