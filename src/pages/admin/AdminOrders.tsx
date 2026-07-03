@@ -276,12 +276,15 @@ export default function AdminOrders() {
                                   <p className="text-xs font-bold text-foreground mb-1">Items:</p>
                                   {(order.items || []).map((item: any, i: number) => {
                                     const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : item.style === "tank" ? "Tank" : null;
+                                    const custom = item.customisation && typeof item.customisation === "object" ? item.customisation : {};
+                                    const customEntries = Object.entries(custom).filter(([key, val]) => val && !(key === "Colour" && val === item.color));
                                     return (
                                       <p key={i} className="text-xs text-foreground/80 pl-2">
                                         • {item.name}
                                         {typeLabel ? ` · ${typeLabel}` : ""}
                                         {item.color ? ` · ${item.color}` : ""}
                                         {item.size ? ` · ${item.size}` : ""}
+                                        {customEntries.map(([key, val]) => ` · ${key}: ${val}`).join("")}
                                         {" × "}{item.quantity} —{" "}
                                         {order.region === "UK"
                                           ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`
