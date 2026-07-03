@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useOrders, useUpdateOrderStatus } from "@/hooks/useAdminData";
 import { toast } from "sonner";
 import { Mail, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const statusColor: Record<string, string> = {
   pending:         "bg-yellow-100 text-yellow-800",
@@ -114,8 +115,25 @@ export default function AdminOrders() {
 
   const handleStatus = async (id: string, status: string, order?: any) => {
     try {
+      const wasAlreadyCancelled = order?.status === "cancelled";
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated to ${status}.`);
+
+      // Put the stock back the moment an order is cancelled — but only
+      // once, so re-saving an already-cancelled order doesn't double-restock.
+      if (status === "cancelled" && !wasAlreadyCancelled && order?.items?.length) {
+        await Promise.allSettled(
+          order.items.map((item: any) =>
+            (supabase as any).rpc("increment_product_stock", {
+              p_product_id: item.product_id,
+              p_style: item.style,
+              p_size: item.size && item.size !== "One Size" ? item.size : null,
+              p_qty: item.quantity,
+            })
+          )
+        );
+      }
+
       if (order && ["confirmed", "in-production", "shipped", "delivered", "cancelled"].includes(status)) {
         const gmailUrl = buildMailtoLink(order, status);
         setTimeout(() => window.open(gmailUrl, "_blank"), 400);

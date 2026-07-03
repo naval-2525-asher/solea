@@ -220,6 +220,7 @@ const Checkout = () => {
         postcode: form.postcode || null,
         region,
         items: items.map((item) => ({
+          product_id: item.productId,
           name: item.name,
           size: item.size,
           color: item.customisation?.Colour ?? null,
