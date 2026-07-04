@@ -115,13 +115,31 @@ export default function AdminOrders() {
 
   const handleStatus = async (id: string, status: string, order?: any) => {
     try {
-      const wasAlreadyCancelled = order?.status === "cancelled";
+      const wasAlreadyConfirmed  = order?.status === "confirmed";
+      const wasAlreadyCancelled  = order?.status === "cancelled";
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated to ${status}.`);
 
-      // Put the stock back the moment an order is cancelled — but only
-      // once, so re-saving an already-cancelled order doesn't double-restock.
-      if (status === "cancelled" && !wasAlreadyCancelled && order?.items?.length) {
+      // ── Decrement stock when admin confirms the order ───────────────────
+      // Only runs once (guard: previous status must NOT already be confirmed).
+      // This is the single source of truth for stock deduction — nothing on
+      // the checkout side touches inventory.
+      if (status === "confirmed" && !wasAlreadyConfirmed && order?.items?.length) {
+        await Promise.allSettled(
+          order.items.map((item: any) =>
+            (supabase as any).rpc("decrement_product_stock", {
+              p_product_id: item.product_id,
+              p_style: item.style,
+              p_size: item.size && item.size !== "One Size" ? item.size : null,
+              p_qty: item.quantity,
+            })
+          )
+        );
+      }
+
+      // ── Restore stock when order is cancelled ───────────────────────────
+      // Only restores if the order was previously confirmed (stock was taken).
+      if (status === "cancelled" && !wasAlreadyCancelled && wasAlreadyConfirmed && order?.items?.length) {
         await Promise.allSettled(
           order.items.map((item: any) =>
             (supabase as any).rpc("increment_product_stock", {

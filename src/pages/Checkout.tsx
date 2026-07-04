@@ -236,23 +236,8 @@ const Checkout = () => {
         delivery_charge: delivery,
       });
 
-      // Reserve the stock immediately so two simultaneous checkouts can
-      // never both claim the last unit. Each call is a single atomic DB
-      // update, so this is safe even under concurrent orders. If the
-      // decrement function hasn't been set up yet (see Admin → Inventory →
-      // Database Setup), we don't block the order — it's still recorded
-      // and the admin can adjust stock manually.
-      await Promise.allSettled(
-        items.map((item) =>
-          (supabase as any).rpc("decrement_product_stock", {
-            p_product_id: item.productId,
-            p_style: item.style,
-            p_size: item.size && item.size !== "One Size" ? item.size : null,
-            p_qty: item.quantity,
-          })
-        )
-      );
-
+      // Stock is NOT decremented here. It only decrements when the admin
+      // changes the order status to "Confirmed" in AdminOrders.
       toast.success("Order placed! 🎉 We'll verify your payment shortly.");
       clearCart();
       navigate("/");
