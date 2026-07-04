@@ -466,6 +466,17 @@ export function useInsertOrder() {
   });
 }
 
+export function useDeleteOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("orders" as any).delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
 // ─── File upload helper ───
 export async function uploadFile(file: File, folder: string): Promise<string> {
   const ext = file.name.split(".").pop();

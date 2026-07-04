@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useOrders, useUpdateOrderStatus } from "@/hooks/useAdminData";
+import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/useAdminData";
 import { toast } from "sonner";
-import { Mail, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, ExternalLink, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const statusColor: Record<string, string> = {
@@ -108,8 +108,20 @@ Soléa`,
 export default function AdminOrders() {
   const { data: orders = [], isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
+  const deleteOrder  = useDeleteOrder();
   const [filter, setFilter] = useState<string>("all");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this order permanently? This cannot be undone.")) return;
+    try {
+      await deleteOrder.mutateAsync(id);
+      toast.success("Order deleted.");
+      if (expandedOrder === id) setExpandedOrder(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const filtered = filter === "all" ? orders : orders.filter((o: any) => o.status === filter);
 
@@ -264,6 +276,15 @@ export default function AdminOrders() {
                               <Mail size={12} />
                               Email
                             </a>
+                            <button
+                              onClick={() => handleDelete(order.id)}
+                              title="Delete order"
+                              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", color: "hsl(var(--muted-foreground))", cursor: "pointer", flexShrink: 0, transition: "all 0.15s" }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#fee2e2"; (e.currentTarget as HTMLButtonElement).style.color = "#dc2626"; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--muted-foreground))"; }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         </td>
                       </tr>
