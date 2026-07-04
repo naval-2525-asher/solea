@@ -268,7 +268,11 @@ export default function AdminInventory() {
     // ── Color stock validation ──────────────────────────────────────────────
     const teeColorNames: string[]  = product?.tee_colors  || [];
     const tankColorNames: string[] = product?.tank_colors || [];
-    const accessoryColorNames = Object.keys(row.color_stock || {});
+    // Only check accessory colors for actual accessory products — tee/tank
+    // products may have leftover color_stock data from old variants which
+    // should never trigger this validation.
+    const isAccessoryProduct = product?.category === "Accessories";
+    const accessoryColorNames = isAccessoryProduct ? Object.keys(row.color_stock || {}) : [];
 
     // Tee colors check — against tee size total only
     if (teeColorNames.length > 0) {
