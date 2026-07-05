@@ -189,7 +189,11 @@ const ProductDetail = () => {
   const customInputs: CustomInput[] = ((dbProduct as any)?.custom_inputs || (product as any).custom_inputs || []).filter((ci: any) => ci && ci.id);
 
   const variantGroups: Record<string, VariantOption[]> = {};
+  // Skip any variant group that is a colour/color picker — those are now
+  // handled by the tee_colors / tank_colors circle picker above.
+  const COLOR_LABELS = ["tee color", "tank color", "color", "colour"];
   variants.forEach((v) => {
+    if (COLOR_LABELS.includes((v.label || "").toLowerCase())) return;
     if (!variantGroups[v.label]) variantGroups[v.label] = [];
     variantGroups[v.label].push(v);
   });
@@ -280,7 +284,7 @@ const ProductDetail = () => {
     Object.entries(selectedVariants).forEach(([label, opt]) => {
       customisation[label] = opt.name;
     });
-    if (selectedColor) customisation["Colour"] = selectedColor;
+    if (selectedColor) customisation["Color"] = selectedColor;
     // Add custom input values
     customInputs.forEach((ci) => {
       if (customValues[ci.id]) {

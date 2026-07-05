@@ -109,7 +109,7 @@ const Cart = () => {
         <div className="flex flex-col gap-4 mb-8">
           {items.map((item) => {
             const key = cartItemKey(item);
-            const colour = item.customisation?.Colour;
+            const colour = item.customisation?.Color || item.customisation?.Colour;
             const stock = getStock(item);
             const oos = isOOS(item);
             const exceedsStock = !oos && stock !== Infinity && item.quantity > stock;
@@ -148,6 +148,12 @@ const Cart = () => {
                   {item.customisation && Object.keys(item.customisation).length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginTop: "6px" }}>
                       {Object.entries(item.customisation).map(([label, value]) => {
+                        // Normalize all color label variants to "Color"
+                        const COLOR_LABELS = ["colour", "color", "tee color", "tank color"];
+                        const isColorLabel = COLOR_LABELS.includes(label.toLowerCase());
+                        const displayLabel = isColorLabel ? "Color" : label;
+                        // Skip if it's the same color already shown in the style line
+                        if (isColorLabel && value === colour) return null;
                         const isColorHex = /^#([0-9a-f]{3}){1,2}$/i.test(value);
                         return (
                           <span
@@ -169,7 +175,7 @@ const Cart = () => {
                                 flexShrink: 0,
                               }} />
                             )}
-                            <span style={{ opacity: 0.65 }}>{label}:</span> {value}
+                            <span style={{ opacity: 0.65 }}>{displayLabel}:</span> {value}
                           </span>
                         );
                       })}

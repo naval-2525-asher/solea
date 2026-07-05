@@ -262,11 +262,14 @@ export default function AdminInventory() {
     const total = row.stock_count;
 
     // Tee total = sum of tee sizes; Tank total = sum of tank sizes
-    const teeTotal  = Object.values(row.tee_stock  || {}).reduce((s: number, v) => s + (v as number), 0);
-    const tankTotal = Object.values(row.tank_stock || {}).reduce((s: number, v) => s + (v as number), 0);
+    const teeTotal  = TEE_SIZES.reduce((s, sz) => s + (row.tee_stock?.[sz]  ?? 0), 0);
+    const tankTotal = TANK_SIZES.reduce((s, sz) => s + (row.tank_stock?.[sz] ?? 0), 0);
 
     // ── Color stock validation ──────────────────────────────────────────────
-    const teeColorNames: string[]  = product?.tee_colors  || [];
+    // ONLY validate if colors are explicitly configured in AdminProducts.
+    // Never fall back to stock map keys — those may contain stale data from
+    // old variant system which should never trigger color validation.
+    const teeColorNames: string[] = product?.tee_colors || [];
     const tankColorNames: string[] = product?.tank_colors || [];
     // Only check accessory colors for actual accessory products — tee/tank
     // products may have leftover color_stock data from old variants which
@@ -274,43 +277,29 @@ export default function AdminInventory() {
     const isAccessoryProduct = product?.category === "Accessories";
     const accessoryColorNames = isAccessoryProduct ? Object.keys(row.color_stock || {}) : [];
 
-    // Tee colors check — against tee size total only
+    // Tee colors check — against tee size total only (S+M+L+XL)
     if (teeColorNames.length > 0) {
       const teeColorTotal = teeColorNames.reduce((s, c) => s + (row.tee_color_stock[c] ?? 0), 0);
-      if (teeColorNames.length === 1) {
-        if (teeColorTotal > teeTotal) {
-          toast.error(`Tee color "${teeColorNames[0]}" stock (${teeColorTotal}) exceeds Tee total (${teeTotal}). Please reduce it.`);
-          return;
-        }
-      } else {
-        if (teeColorTotal > teeTotal) {
-          toast.error(`Tee colors add up to ${teeColorTotal} but Tee total is only ${teeTotal}. They can't exceed the Tee total.`);
-          return;
-        }
-        if (teeColorTotal < teeTotal) {
-          toast.error(`Tee colors only add up to ${teeColorTotal} but Tee total is ${teeTotal}. All Tee stock must be assigned across colors.`);
-          return;
-        }
+      if (teeColorTotal > teeTotal) {
+        toast.error(`Tee colors add up to ${teeColorTotal} but Tee total is only ${teeTotal}. They can't exceed the Tee total.`);
+        return;
+      }
+      if (teeColorTotal < teeTotal) {
+        toast.error(`Tee colors only add up to ${teeColorTotal} but Tee total is ${teeTotal}. All Tee stock must be assigned across colors.`);
+        return;
       }
     }
 
-    // Tank colors check — against tank size total only
+    // Tank colors check — against tank size total only (S+M+L, never XL)
     if (tankColorNames.length > 0) {
       const tankColorTotal = tankColorNames.reduce((s, c) => s + (row.tank_color_stock[c] ?? 0), 0);
-      if (tankColorNames.length === 1) {
-        if (tankColorTotal > tankTotal) {
-          toast.error(`Tank color "${tankColorNames[0]}" stock (${tankColorTotal}) exceeds Tank total (${tankTotal}). Please reduce it.`);
-          return;
-        }
-      } else {
-        if (tankColorTotal > tankTotal) {
-          toast.error(`Tank colors add up to ${tankColorTotal} but Tank total is only ${tankTotal}. They can't exceed the Tank total.`);
-          return;
-        }
-        if (tankColorTotal < tankTotal) {
-          toast.error(`Tank colors only add up to ${tankColorTotal} but Tank total is ${tankTotal}. All Tank stock must be assigned across colors.`);
-          return;
-        }
+      if (tankColorTotal > tankTotal) {
+        toast.error(`Tank colors add up to ${tankColorTotal} but Tank total is only ${tankTotal}. They can't exceed the Tank total.`);
+        return;
+      }
+      if (tankColorTotal < tankTotal) {
+        toast.error(`Tank colors only add up to ${tankColorTotal} but Tank total is ${tankTotal}. All Tank stock must be assigned across colors.`);
+        return;
       }
     }
 
@@ -443,7 +432,7 @@ export default function AdminInventory() {
         <td className="p-4 align-middle">
           {getStyleColors(product, "tank").length > 0 ? (() => {
             const tankColors = getStyleColors(product, "tank");
-            const tankSzTotal = Object.values(edit.tank_stock || {}).reduce((s: number, v) => s + (v as number), 0);
+            const tankSzTotal = TANK_SIZES.reduce((s, sz) => s + (edit.tank_stock?.[sz] ?? 0), 0);
             const colorSum = tankColors.reduce((s, c) => s + (edit.tank_color_stock[c] ?? 0), 0);
             const isOver  = colorSum > tankSzTotal;
             const isUnder = tankColors.length > 1 && colorSum < tankSzTotal;
@@ -484,7 +473,7 @@ export default function AdminInventory() {
         <td className="p-4 align-middle">
           {getStyleColors(product, "tee").length > 0 ? (() => {
             const teeColors = getStyleColors(product, "tee");
-            const teeSzTotal = Object.values(edit.tee_stock || {}).reduce((s: number, v) => s + (v as number), 0);
+            const teeSzTotal = TEE_SIZES.reduce((s, sz) => s + (edit.tee_stock?.[sz] ?? 0), 0);
             const colorSum = teeColors.reduce((s, c) => s + (edit.tee_color_stock[c] ?? 0), 0);
             const isOver  = colorSum > teeSzTotal;
             const isUnder = teeColors.length > 1 && colorSum < teeSzTotal;

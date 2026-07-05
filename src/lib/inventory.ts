@@ -16,6 +16,7 @@ export function parseStockMap(value: unknown): Record<string, number> {
 }
 
 const sumMap = (m: Record<string, number>) => Object.values(m).reduce((a, b) => a + b, 0);
+const sumSizes = (m: Record<string, number>, sizes: string[]) => sizes.reduce((a, s) => a + (m[s] ?? 0), 0);
 
 /** Per-size stock for a Tee or Tank, isolated from the other style's pool. */
 export function getStyleSizeStock(product: any, style: "tee" | "tank", size: string): number {
@@ -102,7 +103,7 @@ export function recomputeTotals(opts: {
   hasSizeTracking: boolean; // true for Tees & Tank Tops / Limited Edition
 }): { stock_count: number; stock_status: "in_stock" | "low_stock" | "out_of_stock" } {
   const total = opts.hasSizeTracking
-    ? sumMap(opts.teeStock ?? {}) + sumMap(opts.tankStock ?? {})
+    ? sumSizes(opts.teeStock ?? {}, TEE_SIZES) + sumSizes(opts.tankStock ?? {}, TANK_SIZES)
     : sumMap(opts.colorStock ?? {});
   const stock_status = total === 0 ? "out_of_stock" : total <= LOW_STOCK_THRESHOLD ? "low_stock" : "in_stock";
   return { stock_count: total, stock_status };

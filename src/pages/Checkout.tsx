@@ -223,7 +223,7 @@ const Checkout = () => {
           product_id: item.productId,
           name: item.name,
           size: item.size,
-          color: item.customisation?.Colour ?? null,
+          color: item.customisation?.Color ?? item.customisation?.Colour ?? null,
           quantity: item.quantity,
           price: getItemPrice(item),
           style: item.style,
@@ -420,7 +420,7 @@ const Checkout = () => {
               const available = product ? getEffectiveStock(product, item.style, item.size) : Infinity;
               const isOOS = available !== Infinity && available <= 0;
               const exceedsStock = !isOOS && available !== Infinity && item.quantity > available;
-              const colour = item.customisation?.Colour;
+              const colour = item.customisation?.Color || item.customisation?.Colour;
               const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : "Tank";
 
               return (

@@ -316,12 +316,17 @@ export default function AdminOrders() {
                                   {(order.items || []).map((item: any, i: number) => {
                                     const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : item.style === "tank" ? "Tank" : null;
                                     const custom = item.customisation && typeof item.customisation === "object" ? item.customisation : {};
-                                    const customEntries = Object.entries(custom).filter(([key, val]) => val && !(key === "Colour" && val === item.color));
+                                    const COLOR_LABELS = ["colour", "color", "tee color", "tank color"];
+                                    const colorVal = (custom as any)["Color"] || (custom as any)["Colour"] || item.color;
+                                    // Filter out all color keys (shown via colorVal) and keep the rest
+                                    const customEntries = Object.entries(custom).filter(([key, val]) =>
+                                      val && !COLOR_LABELS.includes(key.toLowerCase())
+                                    );
                                     return (
                                       <p key={i} className="text-xs text-foreground/80 pl-2">
                                         • {item.name}
                                         {typeLabel ? ` · ${typeLabel}` : ""}
-                                        {item.color ? ` · ${item.color}` : ""}
+                                        {colorVal ? ` · Color: ${colorVal}` : ""}
                                         {item.size ? ` · ${item.size}` : ""}
                                         {customEntries.map(([key, val]) => ` · ${key}: ${val}`).join("")}
                                         {" × "}{item.quantity} —{" "}
