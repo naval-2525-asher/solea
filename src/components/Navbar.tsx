@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, Search, ArrowRight, ChevronRight, ShoppingBag, ChevronDown } from "lucide-react";
-import { products } from "@/lib/products";
+import { products as staticProducts } from "@/lib/products";
 import { useCart } from "@/context/CartContext";
-import { useSiteSettings } from "@/hooks/useAdminData";
+import { useSiteSettings, useProducts, useSaleProducts } from "@/hooks/useAdminData";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
 // ── Announcement Bar ──────────────────────────────────────────────────────────
@@ -138,16 +138,44 @@ const SlidePanel = ({
   );
 };
 
+// ── Search helpers ────────────────────────────────────────────────────────────
+// A product is "on sale" for search purposes when: the global sale toggle is
+// live, AND the product has an entry in the sale_products table with a price
+// for the shopper's current region.
+const isAccessoryCategory = (category: string) =>
+  category === "Accessories" || category === "Bagcharms";
+
+const getSearchHref = (product: any) =>
+  isAccessoryCategory(product.category) ? `/accessories/${product.id}` : `/product/${product.id}`;
+
 // ── Navbar ────────────────────────────────────────────────────────────────────
 const Navbar: React.FC = () => {
   const { totalItems } = useCart();
-  const { formatPrice } = useRegion();
+  const { formatPrice, region } = useRegion();
   const [menuOpen, setMenuOpen]   = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const navigate  = useNavigate();
   const location  = useLocation();
+
+  // Live product catalogue (falls back to the static list if the DB hasn't
+  // loaded yet / is empty) so search always reflects the latest admin edits.
+  const { data: dbProducts = [] } = useProducts();
+  const { data: saleData = [] } = useSaleProducts();
+  const { data: settings = [] } = useSiteSettings();
+
+  const saleIsLive = (settings as any[]).find((s: any) => s.key === "sale_live")?.value === "true";
+
+  const salePriceMap = useMemo(() => {
+    const map: Record<string, { sale_price: number; sale_price_gbp: number | null }> = {};
+    (saleData as any[]).forEach((s: any) => {
+      map[s.product_id] = { sale_price: s.sale_price, sale_price_gbp: s.sale_price_gbp };
+    });
+    return map;
+  }, [saleData]);
+
+  const allProducts = dbProducts.length > 0 ? dbProducts : staticProducts;
 
   // Close both on route change
   useEffect(() => {
@@ -165,8 +193,40 @@ const Navbar: React.FC = () => {
   const closeSearch = () => { setSearchOpen(false); setSearchQuery(""); };
 
   const filteredProducts = searchQuery.trim()
-    ? products.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? (allProducts as any[]).filter((p: any) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
+
+  // Renders the current price for a search result: the live sale price (if
+  // the sale is on and this product is part of it) with the original price
+  // struck through, otherwise just the regular price — in the shopper's region.
+  const renderSearchPrice = (product: any) => {
+    const sale = salePriceMap[product.id];
+    const onSale = saleIsLive && !!sale;
+
+    if (!onSale) {
+      return (
+        <p style={{ fontFamily: "Georgia, serif", fontSize: "12px", opacity: 0.5, margin: "2px 0 0" }}>
+          {formatPrice(product.price, product.price_gbp)}
+        </p>
+      );
+    }
+
+    const salePriceDisplay =
+      region === "UK"
+        ? `£${Number(sale.sale_price_gbp ?? product.price_gbp ?? 0).toLocaleString("en-GB")}`
+        : `Rs. ${Number(sale.sale_price).toLocaleString()}`;
+
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: "2px" }}>
+        <p style={{ fontFamily: "Georgia, serif", fontSize: "11px", opacity: 0.45, textDecoration: "line-through", margin: 0 }}>
+          {formatPrice(product.price, product.price_gbp)}
+        </p>
+        <p style={{ fontFamily: "Georgia, serif", fontSize: "12px", fontWeight: 700, color: "#dc2626", margin: 0 }}>
+          {salePriceDisplay}
+        </p>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -238,7 +298,7 @@ const Navbar: React.FC = () => {
               onKeyDown={(e) => {
                 if (e.key === "Escape") closeSearch();
                 if (e.key === "Enter" && filteredProducts.length === 1) {
-                  navigate(`/product/${filteredProducts[0].id}`);
+                  navigate(getSearchHref(filteredProducts[0]));
                   closeSearch();
                 }
               }}
@@ -259,19 +319,19 @@ const Navbar: React.FC = () => {
           {searchQuery.trim() !== "" && filteredProducts.length === 0 && (
             <p style={{ fontFamily: "Georgia, serif", fontSize: "13px", color: "hsl(var(--destructive))", padding: "14px 8px" }}>No results for "{searchQuery}"</p>
           )}
-          {filteredProducts.map((product) => (
+          {filteredProducts.map((product: any) => (
             <Link
               key={product.id}
-              to={`/product/${product.id}`}
+              to={getSearchHref(product)}
               onClick={closeSearch}
               style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "12px", textDecoration: "none", color: "hsl(var(--foreground))", transition: "background 0.15s", marginBottom: "2px" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--secondary))")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
-              <img src={product.image} alt={product.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0, background: "hsl(var(--secondary))" }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              <img src={product.image || product.images?.[0] || ""} alt={product.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0, background: "hsl(var(--secondary))" }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontFamily: "Georgia, serif", fontSize: "13px", fontWeight: 700, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{product.name}</p>
-                <p style={{ fontFamily: "Georgia, serif", fontSize: "12px", opacity: 0.5, margin: "2px 0 0" }}>{formatPrice(product.price, product.price_gbp)}</p>
+                {renderSearchPrice(product)}
               </div>
               <ArrowRight size={14} style={{ opacity: 0.3, flexShrink: 0 }} />
             </Link>

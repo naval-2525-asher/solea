@@ -3,6 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
+// Defaults used only if the `admin_settings` row hasn't been customized yet.
+export const DEFAULT_ADMIN_USERNAME = "superadmin";
+export const DEFAULT_ADMIN_PASSWORD = "1122";
+
 interface AdminLoginProps {
   onLogin: () => void;
 }
@@ -18,16 +22,18 @@ const AdminLogin = ({ onLogin }: AdminLoginProps) => {
     setError("");
     setChecking(true);
     try {
-      let storedPassword = "1122";
+      let storedUsername = DEFAULT_ADMIN_USERNAME;
+      let storedPassword = DEFAULT_ADMIN_PASSWORD;
       const { data, error: fetchError } = await (supabase as any)
         .from("admin_settings")
-        .select("admin_password")
+        .select("admin_username, admin_password")
         .eq("id", 1)
         .maybeSingle();
-      if (!fetchError && data?.admin_password) {
-        storedPassword = data.admin_password;
+      if (!fetchError && data) {
+        if (data.admin_username) storedUsername = data.admin_username;
+        if (data.admin_password) storedPassword = data.admin_password;
       }
-      if (username === "superadmin" && password === storedPassword) {
+      if (username === storedUsername && password === storedPassword) {
         sessionStorage.setItem("admin_logged_in", "true");
         onLogin();
       } else {

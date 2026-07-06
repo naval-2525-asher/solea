@@ -32,25 +32,33 @@ serve(async (req) => {
   }
 
   const body = await req.json();
-  const { type, order, whatsappNumber } = body;
+  const { type, order, email, code } = body;
 
   let emailPayload: any = null;
 
   // ── Helper: format items list (HTML) ──
+  const extraCustomisationDetails = (item: any): string[] => {
+    const custom = item.customisation && typeof item.customisation === "object" ? item.customisation : {};
+    return Object.entries(custom)
+      .filter(([key, val]) => val && !(key === "Colour" && val === item.color))
+      .map(([key, val]) => `${key}: ${val}`);
+  };
+
   const itemsHtml = (items: any[], region: string) =>
     (items || [])
-      .map(
-        (item: any) =>
-          `<tr>
-            <td style="padding:6px 8px;font-family:Georgia,serif;font-size:14px;color:#333;">${item.name} (${item.size || "—"})</td>
+      .map((item: any) => {
+        const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : item.style === "tank" ? "Tank" : null;
+        const details = [typeLabel, item.color, item.size, ...extraCustomisationDetails(item)].filter(Boolean).join(", ") || "—";
+        return `<tr>
+            <td style="padding:6px 8px;font-family:Georgia,serif;font-size:14px;color:#333;">${item.name} (${details})</td>
             <td style="padding:6px 8px;font-family:Georgia,serif;font-size:14px;color:#333;text-align:center;">${item.quantity}</td>
             <td style="padding:6px 8px;font-family:Georgia,serif;font-size:14px;color:#333;text-align:right;">${
               region === "UK"
                 ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`
                 : `PKR ${(item.price * item.quantity).toLocaleString()}`
             }</td>
-          </tr>`
-      )
+          </tr>`;
+      })
       .join("");
 
   const formatTotal = (total: number, region: string) =>
@@ -92,7 +100,7 @@ serve(async (req) => {
               <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Address</td>
                   <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;">${order.address}, ${order.city}${order.province ? `, ${order.province}` : ""}${order.postcode ? ` ${order.postcode}` : ""}</td></tr>
               <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Transaction ID</td>
-                  <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;font-weight:bold;">${order.transaction_id}</td></tr>
+                  <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;font-weight:bold;">${order.transaction_id || "—"}</td></tr>
               <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Region</td>
                   <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;">${order.region || "PK"}</td></tr>
             </table>
@@ -143,21 +151,24 @@ serve(async (req) => {
             <h2 style="font-family:Georgia,serif;font-size:20px;color:#1a1a1a;margin:0 0 8px;">Thank you, ${order.first_name}! 🌸</h2>
             <p style="font-family:Georgia,serif;font-size:14px;color:#555;line-height:1.7;margin:0 0 20px;">
               We've received your order and your transaction screenshot is currently being reviewed and verified by our team.
-              Once verified, you'll receive a <strong>WhatsApp confirmation message</strong> from us — so please keep an eye on your WhatsApp!
+              You will receive all updates and confirmations via email — please keep an eye on your inbox!
             </p>
 
             <div style="background:#f9f4f0;border:1px solid #e8ddd4;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
               <p style="font-family:Georgia,serif;font-size:13px;font-weight:bold;color:#8B1A1A;margin:0 0 12px;letter-spacing:0.5px;text-transform:uppercase;">Your Order Summary</p>
               <table style="width:100%;border-collapse:collapse;">
-                ${(order.items || []).map((item: any) =>
-                  `<tr>
-                    <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;">${item.name} (${item.size || "—"}) × ${item.quantity}</td>
+                ${(order.items || []).map((item: any) => {
+                  const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : item.style === "tank" ? "Tank" : null;
+                  const details = [typeLabel, item.color, item.size, ...extraCustomisationDetails(item)].filter(Boolean).join(", ") || "—";
+                  return `<tr>
+                    <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;">${item.name} (${details}) × ${item.quantity}</td>
                     <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;text-align:right;font-weight:bold;">${
                       order.region === "UK"
                         ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`
                         : `PKR ${(item.price * item.quantity).toLocaleString()}`
                     }</td>
-                  </tr>`).join("")}
+                  </tr>`;
+                }).join("")}
                 <tr style="border-top:1px solid #e8ddd4;">
                   <td style="padding:10px 0 0;font-family:Georgia,serif;font-size:14px;font-weight:bold;color:#333;">Total</td>
                   <td style="padding:10px 0 0;font-family:Georgia,serif;font-size:14px;font-weight:bold;color:#8B1A1A;text-align:right;">${formatTotal(order.total, order.region)}</td>
@@ -165,9 +176,9 @@ serve(async (req) => {
               </table>
             </div>
 
-            <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-              <p style="font-family:Georgia,serif;font-size:13px;color:#856404;margin:0;line-height:1.6;">
-                📱 <strong>Watch your WhatsApp!</strong> Once your payment is verified, we'll send you a confirmation message. Please make sure your number <strong>${order.phone}</strong> is active on WhatsApp.
+            <div style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+              <p style="font-family:Georgia,serif;font-size:13px;color:#3730a3;margin:0;line-height:1.6;">
+                📧 <strong>Watch your inbox!</strong> Once your payment is verified, we'll send you a confirmation email to <strong>${order.email}</strong>.
               </p>
             </div>
 
@@ -183,47 +194,87 @@ serve(async (req) => {
     };
   }
 
-  // ── TYPE 3: Admin reminder when order is confirmed (includes WhatsApp number) ──
+  // ── TYPE 3: Admin notification when order is confirmed ──
   else if (type === "admin_order_confirmed") {
+    const ref = (order.id || "").slice(0, 8).toUpperCase();
     emailPayload = {
       from: FROM_EMAIL,
       to: [ADMIN_EMAIL],
-      subject: `✅ Order Confirmed — WhatsApp ${order.first_name} ${order.last_name} on ${whatsappNumber}`,
+      subject: `✅ Order Confirmed — ${order.first_name} ${order.last_name} (#${ref})`,
       html: `
         <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e8ddd4;border-radius:12px;overflow:hidden;">
-          <div style="background:#25D366;padding:24px 32px;">
+          <div style="background:#8B1A1A;padding:24px 32px;">
             <h1 style="font-family:Georgia,serif;color:#fff;margin:0;font-size:22px;letter-spacing:1px;">soléa</h1>
-            <p style="font-family:Georgia,serif;color:rgba(255,255,255,0.9);margin:4px 0 0;font-size:13px;">Order Verified — Action Required</p>
+            <p style="font-family:Georgia,serif;color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:13px;">Order Verified & Confirmed</p>
           </div>
           <div style="padding:28px 32px;">
-            <h2 style="font-family:Georgia,serif;font-size:18px;color:#1a1a1a;margin:0 0 8px;">Send WhatsApp Confirmation</h2>
+            <h2 style="font-family:Georgia,serif;font-size:18px;color:#1a1a1a;margin:0 0 8px;">Order #${ref} has been confirmed</h2>
             <p style="font-family:Georgia,serif;font-size:14px;color:#555;line-height:1.7;margin:0 0 20px;">
-              You marked an order as <strong>Verified / Confirmed</strong>. Please send a WhatsApp message to the customer
-              from your active number below:
+              You marked this order as <strong>Verified / Confirmed</strong>. A confirmation email should now be sent to the customer via the Orders panel.
             </p>
 
-            <div style="background:#f0fdf4;border:2px solid #25D366;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
-              <p style="font-family:Georgia,serif;font-size:13px;color:#166534;margin:0 0 4px;font-weight:bold;">📱 Number in Use</p>
-              <p style="font-family:Georgia,serif;font-size:22px;color:#166534;margin:0;font-weight:bold;letter-spacing:1px;">${whatsappNumber}</p>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+              <p style="font-family:Georgia,serif;font-size:13px;color:#166534;margin:0 0 4px;font-weight:bold;">✅ Next Step</p>
+              <p style="font-family:Georgia,serif;font-size:14px;color:#166534;margin:0;line-height:1.6;">
+                Go to the <strong>Orders panel</strong> and use the <strong>Email Customer</strong> button to send the customer their order confirmation email.
+              </p>
             </div>
 
             <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
               <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;width:40%;">Customer</td>
                   <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;font-weight:bold;">${order.first_name} ${order.last_name}</td></tr>
-              <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Customer Phone</td>
+              <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Email</td>
+                  <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;">${order.email}</td></tr>
+              <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Phone</td>
                   <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;">${order.phone}</td></tr>
               <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Total</td>
                   <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#8B1A1A;font-weight:bold;">${formatTotal(order.total, order.region)}</td></tr>
+              <tr><td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#888;">Order Ref</td>
+                  <td style="padding:5px 0;font-family:Georgia,serif;font-size:13px;color:#333;font-weight:bold;">#${ref}</td></tr>
             </table>
+          </div>
+          <div style="padding:16px 32px;background:#f9f4f0;border-top:1px solid #e8ddd4;">
+            <p style="font-family:Georgia,serif;font-size:11px;color:#aaa;margin:0;">Soléa Admin Panel — automated notification</p>
+          </div>
+        </div>
+      `,
+    };
+  }
 
-            <a href="https://wa.me/${(() => {
-              let n = (order.phone || "").replace(/\D/g, "");
-              if (n.startsWith("0") && !n.startsWith("00")) n = "92" + n.slice(1);
-              return n;
-            })()}?text=${encodeURIComponent(`Hello ${order.first_name}! 🌸 Your Soléa order has been verified and confirmed. We'll keep you updated. Thank you for shopping with us! 💕`)}"
-               style="display:inline-block;padding:12px 28px;background:#25D366;color:#fff;font-family:Georgia,serif;font-size:14px;text-decoration:none;border-radius:24px;font-weight:bold;">
-              💬 Open WhatsApp Chat
-            </a>
+  // ── TYPE 4: Admin password/username-change verification code ──
+  // Both credential-change flows share this template; only the wording
+  // (and subject) differ between "Password" and "Username".
+  else if (type === "admin_password_verification" || type === "admin_username_verification") {
+    const recipient = email || ADMIN_EMAIL;
+    const fieldLabel = type === "admin_username_verification" ? "Username" : "Password";
+    const fieldLower = fieldLabel.toLowerCase();
+    emailPayload = {
+      from: FROM_EMAIL,
+      to: [recipient],
+      subject: `🔐 Your Soléa Admin verification code: ${code}`,
+      html: `
+        <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e8ddd4;border-radius:12px;overflow:hidden;">
+          <div style="background:#8B1A1A;padding:24px 32px;">
+            <h1 style="font-family:Georgia,serif;color:#fff;margin:0;font-size:22px;letter-spacing:1px;">soléa</h1>
+            <p style="font-family:Georgia,serif;color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:13px;">Admin ${fieldLabel} Change Request</p>
+          </div>
+          <div style="padding:28px 32px;">
+            <h2 style="font-family:Georgia,serif;font-size:18px;color:#1a1a1a;margin:0 0 12px;">Verify your ${fieldLower} change</h2>
+            <p style="font-family:Georgia,serif;font-size:14px;color:#555;line-height:1.7;margin:0 0 20px;">
+              Someone requested to change the ${fieldLower} for the Soléa Admin Panel. Enter the code below in the admin
+              Settings page to confirm this change. This code expires in 10 minutes.
+            </p>
+
+            <div style="text-align:center;background:#f9f4f0;border:1px solid #e8ddd4;border-radius:10px;padding:24px;margin-bottom:24px;">
+              <p style="font-family:Georgia,serif;font-size:13px;color:#888;margin:0 0 8px;letter-spacing:0.5px;text-transform:uppercase;">Verification Code</p>
+              <p style="font-family:Georgia,serif;font-size:32px;font-weight:bold;color:#8B1A1A;margin:0;letter-spacing:8px;">${code}</p>
+            </div>
+
+            <div style="background:#fff8f5;border:1px solid #e8ddd4;border-radius:8px;padding:14px 16px;">
+              <p style="font-family:Georgia,serif;font-size:12px;color:#888;margin:0;line-height:1.6;">
+                If you didn't request this, you can safely ignore this email — your ${fieldLower} will not be changed without this code.
+              </p>
+            </div>
           </div>
           <div style="padding:16px 32px;background:#f9f4f0;border-top:1px solid #e8ddd4;">
             <p style="font-family:Georgia,serif;font-size:11px;color:#aaa;margin:0;">Soléa Admin Panel — automated notification</p>
