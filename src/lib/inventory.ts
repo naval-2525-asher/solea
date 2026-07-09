@@ -25,17 +25,36 @@ export function getStyleSizeStock(product: any, style: "tee" | "tank", size: str
   if (Object.keys(map).length > 0) {
     return map[size] ?? 0;
   }
-  // Back-compat: products saved before per-style tracking existed only have
-  // a single shared `size_stock` map. Use it as a one-time fallback so older
-  // products don't suddenly look unconfigured — admins should re-save these
-  // in the Inventory page to split them into real Tee/Tank pools.
   const legacy = parseStockMap(product.size_stock);
   if (Object.keys(legacy).length > 0) {
     return legacy[size] ?? 0;
   }
-  // No inventory configured at all for this product → treat as unlimited
-  // (matches the original "no stock_count set" behaviour).
   return Infinity;
+}
+
+/**
+ * Stock for a specific size+color combination.
+ * e.g. Tee S Black → tee_size_color_stock["S"]["Black"]
+ * Returns Infinity if no size-color grid is configured for this product/style.
+ */
+export function getSizeColorStock(product: any, style: "tee" | "tank", size: string, color: string): number {
+  if (!product || !color) return Infinity;
+  const field = style === "tee" ? "tee_size_color_stock" : "tank_size_color_stock";
+  const grid = product[field];
+  if (!grid || typeof grid !== "object" || Array.isArray(grid)) return Infinity;
+  const sizeRow = (grid as any)[size];
+  if (!sizeRow || typeof sizeRow !== "object") return Infinity;
+  const n = Number((sizeRow as any)[color]);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+/** Whether a size-color grid exists and has been configured for this style. */
+export function hasSizeColorGrid(product: any, style: "tee" | "tank"): boolean {
+  if (!product) return false;
+  const field = style === "tee" ? "tee_size_color_stock" : "tank_size_color_stock";
+  const grid = product[field];
+  if (!grid || typeof grid !== "object" || Array.isArray(grid)) return false;
+  return Object.keys(grid).length > 0;
 }
 
 /** Per-variant stock for an Accessory (colour / style option). */

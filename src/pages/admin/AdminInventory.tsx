@@ -62,15 +62,39 @@ const PRESET_COLOR_HEX: Record<string, string> = {
 
 // Tee and Tank stock are tracked as two completely separate pools per size —
 // "Tee S" and "Tank S" must never share a number.
+// Option 2: per-size-per-color stock grid stored as { size: { color: count } }
+type SizeColorMap = Record<string, Record<string, number>>;
+
 type EditRow = {
-  stock_count:      number;
-  tee_stock:        Record<string, number>;
-  tank_stock:       Record<string, number>;
-  color_stock:      Record<string, number>;
-  tee_color_stock:  Record<string, number>;
-  tank_color_stock: Record<string, number>;
+  stock_count:           number;
+  tee_stock:             Record<string, number>;
+  tank_stock:            Record<string, number>;
+  color_stock:           Record<string, number>;
+  tee_color_stock:       Record<string, number>;   // kept for back-compat
+  tank_color_stock:      Record<string, number>;   // kept for back-compat
+  tee_size_color_stock:  SizeColorMap;             // NEW: { S: {Black:2, White:1}, M: ... }
+  tank_size_color_stock: SizeColorMap;             // NEW
   stock_status: string;
 };
+
+/** Parse a nested { size: { color: number } } jsonb field safely */
+function parseSizeColorMap(value: unknown, sizes: string[], colors: string[]): SizeColorMap {
+  const out: SizeColorMap = {};
+  const raw = (value && typeof value === "object" && !Array.isArray(value))
+    ? value as Record<string, unknown>
+    : {};
+  for (const size of sizes) {
+    out[size] = {};
+    const sizeRaw = (raw[size] && typeof raw[size] === "object" && !Array.isArray(raw[size]))
+      ? raw[size] as Record<string, unknown>
+      : {};
+    for (const color of colors) {
+      const n = Number(sizeRaw[color]);
+      out[size][color] = Number.isFinite(n) ? Math.max(0, n) : 0;
+    }
+  }
+  return out;
+}
 
 const inputStyle: React.CSSProperties = {
   width: 52, fontFamily: "Georgia, serif", fontSize: "0.78rem", fontWeight: 700,
@@ -201,13 +225,21 @@ export default function AdminInventory() {
       getStyleColors(p, "tee").forEach((c) => { if (existingTeeColorStock[c] === undefined) existingTeeColorStock[c] = 0; });
       getStyleColors(p, "tank").forEach((c) => { if (existingTankColorStock[c] === undefined) existingTankColorStock[c] = 0; });
 
+      // Per-size-per-color stock (Option 2)
+      const teeColors  = getStyleColors(p, "tee");
+      const tankColors = getStyleColors(p, "tank");
+      const existingTeeSizeColorStock  = parseSizeColorMap(p.tee_size_color_stock,  TEE_SIZES,  teeColors);
+      const existingTankSizeColorStock = parseSizeColorMap(p.tank_size_color_stock, TANK_SIZES, tankColors);
+
       init[p.id] = {
-        stock_count:      p.stock_count  ?? 0,
-        tee_stock:        existingTeeStock,
-        tank_stock:       existingTankStock,
-        color_stock:      existingColorStock,
-        tee_color_stock:  existingTeeColorStock,
-        tank_color_stock: existingTankColorStock,
+        stock_count:           p.stock_count  ?? 0,
+        tee_stock:             existingTeeStock,
+        tank_stock:            existingTankStock,
+        color_stock:           existingColorStock,
+        tee_color_stock:       existingTeeColorStock,
+        tank_color_stock:      existingTankColorStock,
+        tee_size_color_stock:  existingTeeSizeColorStock,
+        tank_size_color_stock: existingTankSizeColorStock,
         stock_status: p.stock_status ?? "in_stock",
       };
     });
@@ -251,6 +283,20 @@ export default function AdminInventory() {
     }));
   };
 
+  // Update a single cell in the per-size-per-color grid
+  const updateSizeColorStock = (id: string, style: "tee" | "tank", size: string, color: string, value: number) => {
+    const field = style === "tee" ? "tee_size_color_stock" : "tank_size_color_stock";
+    setEdits((prev) => {
+      const row = prev[id];
+      const oldMap: SizeColorMap = (row as any)[field] || {};
+      const newMap: SizeColorMap = {
+        ...oldMap,
+        [size]: { ...(oldMap[size] || {}), [color]: Math.max(0, value) },
+      };
+      return { ...prev, [id]: { ...row, [field]: newMap } };
+    });
+  };
+
   const handleSave = async (id: string) => {
     if (missingCols) {
       toast.error("Missing DB columns — see setup note above.");
@@ -265,45 +311,56 @@ export default function AdminInventory() {
     const teeTotal  = TEE_SIZES.reduce((s, sz) => s + (row.tee_stock?.[sz]  ?? 0), 0);
     const tankTotal = TANK_SIZES.reduce((s, sz) => s + (row.tank_stock?.[sz] ?? 0), 0);
 
-    // ── Color stock validation ──────────────────────────────────────────────
-    // ONLY validate if colors are explicitly configured in AdminProducts.
-    // Never fall back to stock map keys — those may contain stale data from
-    // old variant system which should never trigger color validation.
+    // ── Size × Color grid validation ────────────────────────────────────────
+    // Rule:
+    //  1. Each size column: sum of all colors for that size must equal
+    //     the size's stock (e.g. Tee S Black+White must = tee_stock["S"])
+    //  2. Grand total of all cells must equal style total (teeTotal / tankTotal)
+    //  (Only runs if colors are set for that style)
+
     const teeColorNames: string[] = product?.tee_colors || [];
     const tankColorNames: string[] = product?.tank_colors || [];
-    // Only check accessory colors for actual accessory products — tee/tank
-    // products may have leftover color_stock data from old variants which
-    // should never trigger this validation.
+
+    if (teeColorNames.length > 0) {
+      const grid = row.tee_size_color_stock;
+      let grandTotal = 0;
+      for (const size of TEE_SIZES) {
+        const sizeTotal = row.tee_stock?.[size] ?? 0;
+        const colorSumForSize = teeColorNames.reduce((s, c) => s + (grid?.[size]?.[c] ?? 0), 0);
+        grandTotal += colorSumForSize;
+        if (colorSumForSize !== sizeTotal) {
+          toast.error(`Tee size ${size}: colors add up to ${colorSumForSize} but size stock is ${sizeTotal}. Each size's colors must exactly match its stock.`);
+          return;
+        }
+      }
+      if (grandTotal !== teeTotal) {
+        toast.error(`Tee color grid total (${grandTotal}) doesn't match Tee total (${teeTotal}). Please fix the grid.`);
+        return;
+      }
+    }
+
+    if (tankColorNames.length > 0) {
+      const grid = row.tank_size_color_stock;
+      let grandTotal = 0;
+      for (const size of TANK_SIZES) {
+        const sizeTotal = row.tank_stock?.[size] ?? 0;
+        const colorSumForSize = tankColorNames.reduce((s, c) => s + (grid?.[size]?.[c] ?? 0), 0);
+        grandTotal += colorSumForSize;
+        if (colorSumForSize !== sizeTotal) {
+          toast.error(`Tank size ${size}: colors add up to ${colorSumForSize} but size stock is ${sizeTotal}. Each size's colors must exactly match its stock.`);
+          return;
+        }
+      }
+      if (grandTotal !== tankTotal) {
+        toast.error(`Tank color grid total (${grandTotal}) doesn't match Tank total (${tankTotal}). Please fix the grid.`);
+        return;
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+    // Accessory colors check — against flat total (accessories have no size grid)
     const isAccessoryProduct = product?.category === "Accessories";
     const accessoryColorNames = isAccessoryProduct ? Object.keys(row.color_stock || {}) : [];
 
-    // Tee colors check — against tee size total only (S+M+L+XL)
-    if (teeColorNames.length > 0) {
-      const teeColorTotal = teeColorNames.reduce((s, c) => s + (row.tee_color_stock[c] ?? 0), 0);
-      if (teeColorTotal > teeTotal) {
-        toast.error(`Tee colors add up to ${teeColorTotal} but Tee total is only ${teeTotal}. They can't exceed the Tee total.`);
-        return;
-      }
-      if (teeColorTotal < teeTotal) {
-        toast.error(`Tee colors only add up to ${teeColorTotal} but Tee total is ${teeTotal}. All Tee stock must be assigned across colors.`);
-        return;
-      }
-    }
-
-    // Tank colors check — against tank size total only (S+M+L, never XL)
-    if (tankColorNames.length > 0) {
-      const tankColorTotal = tankColorNames.reduce((s, c) => s + (row.tank_color_stock[c] ?? 0), 0);
-      if (tankColorTotal > tankTotal) {
-        toast.error(`Tank colors add up to ${tankColorTotal} but Tank total is only ${tankTotal}. They can't exceed the Tank total.`);
-        return;
-      }
-      if (tankColorTotal < tankTotal) {
-        toast.error(`Tank colors only add up to ${tankColorTotal} but Tank total is ${tankTotal}. All Tank stock must be assigned across colors.`);
-        return;
-      }
-    }
-
-    // Accessory colors check — against flat total
     if (accessoryColorNames.length > 0) {
       const accColorTotal = accessoryColorNames.reduce((s, c) => s + (row.color_stock[c] ?? 0), 0);
       if (accessoryColorNames.length === 1) {
@@ -330,13 +387,15 @@ export default function AdminInventory() {
       const { error } = await supabase
         .from("products")
         .update({
-          stock_count:      row.stock_count,
-          tee_variants:     row.tee_stock,
-          tank_variants:    row.tank_stock,
-          color_stock:      row.color_stock,
-          tee_color_stock:  row.tee_color_stock,
-          tank_color_stock: row.tank_color_stock,
-          stock_status:     row.stock_status,
+          stock_count:           row.stock_count,
+          tee_variants:          row.tee_stock,
+          tank_variants:         row.tank_stock,
+          color_stock:           row.color_stock,
+          tee_color_stock:       row.tee_color_stock,
+          tank_color_stock:      row.tank_color_stock,
+          tee_size_color_stock:  row.tee_size_color_stock,
+          tank_size_color_stock: row.tank_size_color_stock,
+          stock_status:          row.stock_status,
         } as any)
         .eq("id", id);
       if (error) throw error;
@@ -428,88 +487,149 @@ export default function AdminInventory() {
           )}
         </td>
 
-        {/* Tank by Color — uses tank_colors chosen in AdminProducts */}
+        {/* Tank by Color grid: colors × sizes */}
         <td className="p-4 align-middle">
           {getStyleColors(product, "tank").length > 0 ? (() => {
             const tankColors = getStyleColors(product, "tank");
-            const tankSzTotal = TANK_SIZES.reduce((s, sz) => s + (edit.tank_stock?.[sz] ?? 0), 0);
-            const colorSum = tankColors.reduce((s, c) => s + (edit.tank_color_stock[c] ?? 0), 0);
-            const isOver  = colorSum > tankSzTotal;
-            const isUnder = tankColors.length > 1 && colorSum < tankSzTotal;
+            const tscGrid = edit.tank_size_color_stock;
+            const grandTotal = TANK_SIZES.reduce((gs, sz) =>
+              gs + tankColors.reduce((cs, c) => cs + (tscGrid?.[sz]?.[c] ?? 0), 0), 0);
+            const tankGrandTotal = TANK_SIZES.reduce((s, sz) => s + (edit.tank_stock?.[sz] ?? 0), 0);
+            const grandOK = grandTotal === tankGrandTotal;
             return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {tankColors.map((color: string) => {
-                  const val = edit.tank_color_stock[color] ?? 0;
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <span style={{ width: 36 }} />
+                  {TANK_SIZES.map((sz) => (
+                    <span key={sz} style={{ width: 40, fontFamily: "Georgia, serif", fontSize: "0.58rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", textAlign: "center" }}>{sz}</span>
+                  ))}
+                  <span style={{ width: 32, fontFamily: "Georgia, serif", fontSize: "0.58rem", fontWeight: 700, color: "hsl(var(--muted-foreground))" }}>Sum</span>
+                </div>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <span style={{ width: 36, fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "hsl(var(--muted-foreground))", textAlign: "right" }}>Stock</span>
+                  {TANK_SIZES.map((sz) => (
+                    <span key={sz} style={{ width: 40, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", textAlign: "center" }}>{edit.tank_stock?.[sz] ?? 0}</span>
+                  ))}
+                </div>
+                {tankColors.map((color) => {
+                  const colorRowTotal = TANK_SIZES.reduce((s, sz) => s + (tscGrid?.[sz]?.[color] ?? 0), 0);
                   return (
-                  <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
-                    <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
-                    <input type="number" min={0}
-                      value={val}
-                      onChange={(e) => updateColorStockByStyle(product.id, "tank", color, Number(e.target.value))}
-                      style={{ ...inputStyle, borderColor: isOver ? "#dc2626" : val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
-                    />
-                  </div>
+                    <div key={color} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <div style={{ width: 36, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1px solid hsl(var(--border))", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
+                      </div>
+                      {TANK_SIZES.map((sz) => {
+                        const val = tscGrid?.[sz]?.[color] ?? 0;
+                        const sizeTotal = edit.tank_stock?.[sz] ?? 0;
+                        const colSum = tankColors.reduce((s, c) => s + (tscGrid?.[sz]?.[c] ?? 0), 0);
+                        return (
+                          <input key={sz} type="number" min={0}
+                            value={val}
+                            onChange={(e) => updateSizeColorStock(product.id, "tank", sz, color, Number(e.target.value))}
+                            style={{ ...inputStyle, width: 40,
+                              borderColor: colSum > sizeTotal ? "#dc2626" : colSum < sizeTotal ? "#d97706" : "hsl(var(--border))",
+                              color: colSum > sizeTotal ? "#dc2626" : colSum < sizeTotal ? "#d97706" : "hsl(var(--foreground))" }}
+                          />
+                        );
+                      })}
+                      <span style={{ width: 32, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "hsl(var(--muted-foreground))" }}>{colorRowTotal}</span>
+                    </div>
                   );
                 })}
+                <div style={{ display: "flex", gap: 4, alignItems: "center", paddingTop: 2, borderTop: "1px solid hsl(var(--border))" }}>
+                  <span style={{ width: 36, fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "hsl(var(--muted-foreground))", textAlign: "right" }}>Sum</span>
+                  {TANK_SIZES.map((sz) => {
+                    const sizeTotal = edit.tank_stock?.[sz] ?? 0;
+                    const colSum = tankColors.reduce((s, c) => s + (tscGrid?.[sz]?.[c] ?? 0), 0);
+                    const ok = colSum === sizeTotal;
+                    return (
+                      <span key={sz} style={{ width: 40, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, textAlign: "center", color: ok ? "#16a34a" : "#dc2626" }}>
+                        {colSum}/{sizeTotal}
+                      </span>
+                    );
+                  })}
+                  <span style={{ width: 32, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: grandOK ? "#16a34a" : "#dc2626" }}>
+                    {grandOK ? `✓${grandTotal}` : `${grandTotal}/${tankGrandTotal}`}
+                  </span>
+                </div>
               </div>
-              {tankColors.length > 1 && (
-                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: isOver ? "#dc2626" : isUnder ? "#d97706" : "#16a34a" }}>
-                  {isOver ? `⚠ Total ${colorSum} exceeds Tank total ${tankSzTotal}` : isUnder ? `⚠ Total ${colorSum} of ${tankSzTotal}` : `✓ ${colorSum} / ${tankSzTotal}`}
-                </span>
-              )}
-              {tankColors.length === 1 && colorSum > tankSzTotal && (
-                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "#dc2626" }}>⚠ Exceeds total stock</span>
-              )}
-            </div>
             );
           })() : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
           )}
         </td>
 
-        {/* Tee by Color — uses tee_colors chosen in AdminProducts */}
+        {/* Tee by Color grid: colors × sizes */}
         <td className="p-4 align-middle">
           {getStyleColors(product, "tee").length > 0 ? (() => {
             const teeColors = getStyleColors(product, "tee");
-            const teeSzTotal = TEE_SIZES.reduce((s, sz) => s + (edit.tee_stock?.[sz] ?? 0), 0);
-            const colorSum = teeColors.reduce((s, c) => s + (edit.tee_color_stock[c] ?? 0), 0);
-            const isOver  = colorSum > teeSzTotal;
-            const isUnder = teeColors.length > 1 && colorSum < teeSzTotal;
+            const tscGrid = edit.tee_size_color_stock;
+            const grandTotal = TEE_SIZES.reduce((gs, sz) =>
+              gs + teeColors.reduce((cs, c) => cs + (tscGrid?.[sz]?.[c] ?? 0), 0), 0);
+            const teeGrandTotal = TEE_SIZES.reduce((s, sz) => s + (edit.tee_stock?.[sz] ?? 0), 0);
+            const grandOK = grandTotal === teeGrandTotal;
             return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {teeColors.map((color: string) => {
-                  const val = edit.tee_color_stock[color] ?? 0;
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <span style={{ width: 36 }} />
+                  {TEE_SIZES.map((sz) => (
+                    <span key={sz} style={{ width: 40, fontFamily: "Georgia, serif", fontSize: "0.58rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", textAlign: "center" }}>{sz}</span>
+                  ))}
+                  <span style={{ width: 32, fontFamily: "Georgia, serif", fontSize: "0.58rem", fontWeight: 700, color: "hsl(var(--muted-foreground))" }}>Sum</span>
+                </div>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <span style={{ width: 36, fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "hsl(var(--muted-foreground))", textAlign: "right" }}>Stock</span>
+                  {TEE_SIZES.map((sz) => (
+                    <span key={sz} style={{ width: 40, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", textAlign: "center" }}>{edit.tee_stock?.[sz] ?? 0}</span>
+                  ))}
+                </div>
+                {teeColors.map((color) => {
+                  const colorRowTotal = TEE_SIZES.reduce((s, sz) => s + (tscGrid?.[sz]?.[color] ?? 0), 0);
                   return (
-                  <div key={color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span style={{ width: 16, height: 16, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1.5px solid hsl(var(--border))", display: "block", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
-                    <span style={{ fontFamily: "Georgia, serif", fontSize: "0.55rem", fontWeight: 700, color: "hsl(var(--muted-foreground))", maxWidth: 40, textAlign: "center" }}>{color}</span>
-                    <input type="number" min={0}
-                      value={val}
-                      onChange={(e) => updateColorStockByStyle(product.id, "tee", color, Number(e.target.value))}
-                      style={{ ...inputStyle, borderColor: isOver ? "#dc2626" : val === 0 ? "#dc2626" : val <= LOW_STOCK_THRESHOLD ? "#d97706" : "hsl(var(--border))" }}
-                    />
-                  </div>
+                    <div key={color} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <div style={{ width: 36, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: PRESET_COLOR_HEX[color] || "#888", border: "1px solid hsl(var(--border))", boxShadow: color === "White" ? "inset 0 0 0 1px #ccc" : "none" }} />
+                      </div>
+                      {TEE_SIZES.map((sz) => {
+                        const val = tscGrid?.[sz]?.[color] ?? 0;
+                        const sizeTotal = edit.tee_stock?.[sz] ?? 0;
+                        const colSum = teeColors.reduce((s, c) => s + (tscGrid?.[sz]?.[c] ?? 0), 0);
+                        return (
+                          <input key={sz} type="number" min={0}
+                            value={val}
+                            onChange={(e) => updateSizeColorStock(product.id, "tee", sz, color, Number(e.target.value))}
+                            style={{ ...inputStyle, width: 40,
+                              borderColor: colSum > sizeTotal ? "#dc2626" : colSum < sizeTotal ? "#d97706" : "hsl(var(--border))",
+                              color: colSum > sizeTotal ? "#dc2626" : colSum < sizeTotal ? "#d97706" : "hsl(var(--foreground))" }}
+                          />
+                        );
+                      })}
+                      <span style={{ width: 32, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "hsl(var(--muted-foreground))" }}>{colorRowTotal}</span>
+                    </div>
                   );
                 })}
+                <div style={{ display: "flex", gap: 4, alignItems: "center", paddingTop: 2, borderTop: "1px solid hsl(var(--border))" }}>
+                  <span style={{ width: 36, fontFamily: "Georgia, serif", fontSize: "0.58rem", color: "hsl(var(--muted-foreground))", textAlign: "right" }}>Sum</span>
+                  {TEE_SIZES.map((sz) => {
+                    const sizeTotal = edit.tee_stock?.[sz] ?? 0;
+                    const colSum = teeColors.reduce((s, c) => s + (tscGrid?.[sz]?.[c] ?? 0), 0);
+                    const ok = colSum === sizeTotal;
+                    return (
+                      <span key={sz} style={{ width: 40, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, textAlign: "center", color: ok ? "#16a34a" : "#dc2626" }}>
+                        {colSum}/{sizeTotal}
+                      </span>
+                    );
+                  })}
+                  <span style={{ width: 32, fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: grandOK ? "#16a34a" : "#dc2626" }}>
+                    {grandOK ? `✓${grandTotal}` : `${grandTotal}/${teeGrandTotal}`}
+                  </span>
+                </div>
               </div>
-              {teeColors.length > 1 && (
-                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: isOver ? "#dc2626" : isUnder ? "#d97706" : "#16a34a" }}>
-                  {isOver ? `⚠ Total ${colorSum} exceeds Tee total ${teeSzTotal}` : isUnder ? `⚠ Total ${colorSum} of ${teeSzTotal}` : `✓ ${colorSum} / ${teeSzTotal}`}
-                </span>
-              )}
-              {teeColors.length === 1 && colorSum > teeSzTotal && (
-                <span style={{ fontFamily: "Georgia, serif", fontSize: "0.62rem", fontWeight: 700, color: "#dc2626" }}>⚠ Exceeds total stock</span>
-              )}
-            </div>
             );
           })() : (
             <span className="font-serif text-xs text-muted-foreground opacity-40">—</span>
           )}
         </td>
-
         {/* Status */}
         <td className="p-4 align-middle">
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: si.bg, color: si.color, fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, padding: "4px 10px", borderRadius: "2rem" }}>

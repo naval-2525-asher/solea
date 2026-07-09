@@ -10,7 +10,7 @@ import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useSaleProducts } from "@/hooks/useAdminData";
 import { useRegion } from "@/context/RegionContext";
-import { getStyleSizeStock, LOW_STOCK_THRESHOLD } from "@/lib/inventory";
+import { getStyleSizeStock, LOW_STOCK_THRESHOLD, getSizeColorStock, hasSizeColorGrid } from "@/lib/inventory";
 
 type VariantOption = { label: string; name: string; price_diff: number };
 type CustomInput = {
@@ -159,9 +159,44 @@ const ProductDetail = () => {
     return raw === Infinity ? Infinity : Math.max(0, raw - inCartQty(size));
   };
 
-  const selectedSizeStock = hasSizes
-    ? (selectedSize ? remainingForSize(selectedSize) : Infinity)
-    : (stockCount === Infinity ? Infinity : Math.max(0, stockCount - inCartQty(null)));
+  // Per-size-per-color stock. When the admin has filled the color grid,
+  // a customer picking Tee S + Black can only buy up to tee_size_color_stock["S"]["Black"].
+  const hasColorGrid = hasSizes && !!selectedSize && !!selectedColor
+    ? hasSizeColorGrid(dbProduct, effectiveType)
+    : false;
+
+  const colorSizeStock: number = (() => {
+    if (!hasColorGrid || !selectedSize || !selectedColor) return Infinity;
+    return getSizeColorStock(dbProduct, effectiveType, selectedSize, selectedColor);
+  })();
+
+  // In-cart qty for this exact size+color combo
+  const inCartQtyColorSize = (() => {
+    if (!selectedSize || !selectedColor) return 0;
+    return cartItems
+      .filter((i) =>
+        i.productId === ((dbProduct as any)?.id ?? (typeof product.id === "number" ? product.id : 9999)) &&
+        i.size === selectedSize &&
+        i.style === effectiveType &&
+        i.customisation?.Color === selectedColor
+      )
+      .reduce((sum, i) => sum + i.quantity, 0);
+  })();
+
+  const remainingColorSize: number = colorSizeStock === Infinity
+    ? Infinity
+    : Math.max(0, colorSizeStock - inCartQtyColorSize);
+
+  // Effective stock the quantity stepper and add-to-cart use:
+  // if a color grid exists AND a color is selected, use the tighter size+color limit
+  const effectiveSelectedStock: number = (() => {
+    if (hasColorGrid && selectedSize && selectedColor) return remainingColorSize;
+    if (selectedSize) return remainingForSize(selectedSize);
+    return stockCount === Infinity ? Infinity : stockCount;
+  })();
+
+  // effectiveSelectedStock already computed above — alias for readability
+  const selectedSizeStock = effectiveSelectedStock;
 
   const allSizesOOS = hasSizes && currentSizes.length > 0 && currentSizes.every((s: string) => getSizeStock(s) <= 0);
   const isLowStock = hasSizes
@@ -247,6 +282,15 @@ const ProductDetail = () => {
       return;
     }
 
+    // 1c. Size+color stock validation when color grid exists
+    if (hasSizes && selectedSize && selectedColor && hasSizeColorGrid(dbProduct, effectiveType)) {
+      const scStock = getSizeColorStock(dbProduct, effectiveType, selectedSize, selectedColor);
+      if (scStock !== Infinity && scStock <= 0) {
+        toast.error(`${selectedColor} in size ${selectedSize} is out of stock.`);
+        return;
+      }
+    }
+
     // 2. Variant group validation
     const missingVariants = Object.keys(variantGroups).filter((g) => !selectedVariants[g]);
     if (missingVariants.length > 0) {
@@ -270,7 +314,9 @@ const ProductDetail = () => {
     // Stock quantity validation — accounts for what's already sitting in the cart
     if (selectedSizeStock !== Infinity && quantity > selectedSizeStock) {
       setQuantityError(
-        hasSizes
+        hasColorGrid && selectedSize && selectedColor
+          ? `Only ${selectedSizeStock} of ${selectedColor} in size ${selectedSize} available.`
+          : hasSizes
           ? `Only ${selectedSizeStock} of size ${selectedSize} available (some may already be in your cart).`
           : `Only ${selectedSizeStock} of this item available in stock.`
       );
@@ -545,12 +591,19 @@ const ProductDetail = () => {
                 {activeColors.map((colorName) => {
                   const hex = PRESET_COLOR_HEX[colorName] || "#888";
                   const isSelected = selectedColor === colorName;
-                  // Check per-style color stock — 0 = sold out for this color
-                  const colorStockMap = selectedType === "tee"
-                    ? ((dbProduct as any)?.tee_color_stock || {})
-                    : ((dbProduct as any)?.tank_color_stock || {});
-                  const hasColorStock = Object.keys(colorStockMap).length > 0;
-                  const colorStock = hasColorStock ? (colorStockMap[colorName] ?? 0) : Infinity;
+                  // If a size is selected and a color grid exists, use size+color stock
+                  // Otherwise fall back to the flat per-style color total
+                  let colorStock: number;
+                  if (selectedSize && hasSizeColorGrid(dbProduct, effectiveType)) {
+                    const raw = getSizeColorStock(dbProduct, effectiveType, selectedSize, colorName);
+                    colorStock = raw === Infinity ? Infinity : Math.max(0, raw);
+                  } else {
+                    const colorStockMap = effectiveType === "tee"
+                      ? ((dbProduct as any)?.tee_color_stock || {})
+                      : ((dbProduct as any)?.tank_color_stock || {});
+                    const hasColorStock = Object.keys(colorStockMap).length > 0;
+                    colorStock = hasColorStock ? (colorStockMap[colorName] ?? 0) : Infinity;
+                  }
                   const colorOOS = colorStock !== Infinity && colorStock <= 0;
                   return (
                     <button
