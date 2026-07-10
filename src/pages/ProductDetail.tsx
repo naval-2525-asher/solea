@@ -12,7 +12,13 @@ import { useSaleProducts } from "@/hooks/useAdminData";
 import { useRegion } from "@/context/RegionContext";
 import { getStyleSizeStock, LOW_STOCK_THRESHOLD, getSizeColorStock, hasSizeColorGrid } from "@/lib/inventory";
 
-type VariantOption = { label: string; name: string; price_diff: number };
+type VariantOption = {
+  label: string;
+  name: string;
+  price_diff: number;       // PKR add-on
+  price_diff_gbp?: number;  // GBP add-on (falls back to price_diff if unset, for older data)
+  required?: boolean;       // defaults to true (existing behaviour) if unset
+};
 type CustomInput = {
   id: string;
   label: string;
@@ -20,6 +26,12 @@ type CustomInput = {
   required: boolean;
   placeholder?: string;
   options?: string[];
+  // If set, this field only appears (and is only required) once the shopper
+  // has picked the matching variant group — e.g. "Embroidered Text" only
+  // shows once "with text" is selected. Leave depends_on_option unset to
+  // match ANY option chosen within that group.
+  depends_on_group?: string;
+  depends_on_option?: string;
 };
 
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
@@ -233,6 +245,11 @@ const ProductDetail = () => {
     variantGroups[v.label].push(v);
   });
 
+  // A group is optional only if every option in it was explicitly marked
+  // not required — this keeps older products (no `required` field saved)
+  // behaving exactly as before, i.e. required.
+  const isGroupRequired = (options: VariantOption[]) => !options.every((o) => o.required === false);
+
   // Per-style color circles — driven by admin's tee_colors / tank_colors picks
   const PRESET_COLOR_HEX: Record<string, string> = {
     Black: "#000000", White: "#FFFFFF", Red: "#DC2626",
@@ -243,12 +260,16 @@ const ProductDetail = () => {
   const tankColors: string[] = (dbProduct as any)?.tank_colors || [];
   const activeColors = selectedType === "tee" ? teeColors : tankColors;
 
-  const extraPrice = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff || 0), 0);
-  const displayPrice = (product.price || 0) + extraPrice;
+  // PKR and GBP add-ons are tracked separately so a variant's surcharge is
+  // correct in whichever currency the shopper is viewing (GBP falls back to
+  // the PKR value only if no GBP-specific amount was ever set).
+  const extraPricePk  = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff || 0), 0);
+  const extraPriceGbp = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff_gbp ?? v.price_diff ?? 0), 0);
+  const displayPrice = (product.price || 0) + extraPricePk;
 
   const saleItem = (saleData as any[]).find((s: any) => s.product_id === product.id);
-  const salePrice = saleItem ? Number(saleItem.sale_price) + extraPrice : null;
-  const salePriceGbp = saleItem?.sale_price_gbp != null ? Number(saleItem.sale_price_gbp) + extraPrice : null;
+  const salePrice = saleItem ? Number(saleItem.sale_price) + extraPricePk : null;
+  const salePriceGbp = saleItem?.sale_price_gbp != null ? Number(saleItem.sale_price_gbp) + extraPriceGbp : null;
   const discount = salePrice
     ? region === "UK" && salePriceGbp && (dbProduct as any)?.price_gbp
       ? Math.round((((dbProduct as any).price_gbp - saleItem.sale_price_gbp) / (dbProduct as any).price_gbp) * 100)
@@ -291,16 +312,28 @@ const ProductDetail = () => {
       }
     }
 
-    // 2. Variant group validation
-    const missingVariants = Object.keys(variantGroups).filter((g) => !selectedVariants[g]);
+    // 2. Variant group validation — optional groups (all options marked
+    // not required) don't block checkout if left unselected.
+    const missingVariants = Object.keys(variantGroups).filter(
+      (g) => isGroupRequired(variantGroups[g]) && !selectedVariants[g]
+    );
     if (missingVariants.length > 0) {
       setErrorGroups(missingVariants);
       triggerShake(missingVariants);
       return;
     }
 
-    // 3. Required custom input validation
-    const missingInputs = customInputs.filter((ci) => ci.required && !customValues[ci.id]?.trim()).map((ci) => ci.id);
+    // 3. Required custom input validation — a field tied to a variant group
+    // (depends_on_group) is only enforced once that variant is selected.
+    const isCustomInputActive = (ci: CustomInput) => {
+      if (!ci.depends_on_group) return true;
+      const picked = selectedVariants[ci.depends_on_group];
+      if (!picked) return false;
+      return ci.depends_on_option ? picked.name === ci.depends_on_option : true;
+    };
+    const missingInputs = customInputs
+      .filter((ci) => ci.required && isCustomInputActive(ci) && !customValues[ci.id]?.trim())
+      .map((ci) => ci.id);
     if (missingInputs.length > 0) {
       setCustomErrors(missingInputs);
       triggerShake([]);
@@ -331,15 +364,21 @@ const ProductDetail = () => {
       customisation[label] = opt.name;
     });
     if (selectedColor) customisation["Color"] = selectedColor;
-    // Add custom input values
+    // Add custom input values (skip any field whose dependent variant isn't
+    // currently selected — avoids leaking a stale value typed earlier)
     customInputs.forEach((ci) => {
+      if (ci.depends_on_group) {
+        const picked = selectedVariants[ci.depends_on_group];
+        const active = picked && (!ci.depends_on_option || picked.name === ci.depends_on_option);
+        if (!active) return;
+      }
       if (customValues[ci.id]) {
         customisation[ci.label] = customValues[ci.id];
       }
     });
 
     const gbpBase = (dbProduct as any)?.price_gbp && Number((dbProduct as any).price_gbp) > 0
-      ? Number((dbProduct as any).price_gbp) : null;
+      ? Number((dbProduct as any).price_gbp) + extraPriceGbp : null;
     const saleGbpBase = salePriceGbp && salePriceGbp > 0 ? salePriceGbp : null;
 
     const regionPrice = region === "UK"
@@ -490,12 +529,12 @@ const ProductDetail = () => {
                   ? salePriceGbp && salePriceGbp > 0
                     ? `£${salePriceGbp.toLocaleString("en-GB")}`
                     : (dbProduct as any)?.price_gbp && Number((dbProduct as any).price_gbp) > 0
-                      ? `£${(Number((dbProduct as any).price_gbp) + extraPrice).toLocaleString("en-GB")}`
+                      ? `£${(Number((dbProduct as any).price_gbp) + extraPriceGbp).toLocaleString("en-GB")}`
                       : `Rs. ${salePrice.toLocaleString()} (GBP price not set)`
                   : `Rs. ${salePrice.toLocaleString()}`}
               </p>
               <p className="font-serif text-lg" style={{ textDecoration: "line-through", opacity: 0.45 }}>
-                {formatPrice(displayPrice, (dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0 ? Number((dbProduct as any)?.price_gbp) : undefined)}
+                {formatPrice(displayPrice, (dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0 ? Number((dbProduct as any)?.price_gbp) + extraPriceGbp : undefined)}
               </p>
               {discount !== null && (
                 <span style={{ background: "hsl(var(--foreground))", color: "hsl(var(--background))", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.7rem", padding: "3px 10px", borderRadius: "2rem" }}>
@@ -507,9 +546,9 @@ const ProductDetail = () => {
             <p className="text-foreground font-serif text-2xl font-bold mb-8">
               {region === "UK" && !((dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0)
                 ? `Rs. ${displayPrice.toLocaleString()} (GBP price not set)`
-                : formatPrice(displayPrice, (dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0 ? Number((dbProduct as any)?.price_gbp) + extraPrice : undefined)}
-              {extraPrice > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPrice.toLocaleString()} for selected option)</span>}
-              {extraPrice > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPrice.toLocaleString("en-GB")} for selected option)</span>}
+                : formatPrice(displayPrice, (dbProduct as any)?.price_gbp && Number((dbProduct as any)?.price_gbp) > 0 ? Number((dbProduct as any)?.price_gbp) + extraPriceGbp : undefined)}
+              {extraPricePk > 0 && region === "PK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+Rs. {extraPricePk.toLocaleString()} for selected option)</span>}
+              {extraPriceGbp > 0 && region === "UK" && <span className="text-sm font-normal text-muted-foreground ml-2">(+£{extraPriceGbp.toLocaleString("en-GB")} for selected option)</span>}
             </p>
           )}
 
@@ -652,13 +691,18 @@ const ProductDetail = () => {
           {Object.entries(variantGroups).map(([groupLabel, options]) => {
             const selected = selectedVariants[groupLabel];
             const isColorGroup = groupLabel.toLowerCase() === "color" || groupLabel.toLowerCase() === "colour";
+            const groupRequired = isGroupRequired(options);
             const hasError = errorGroups.includes(groupLabel);
             const isShaking = shakeGroups.includes(groupLabel);
             return (
               <div key={groupLabel} style={{ marginBottom: "1.75rem" }}>
                 <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
                   {groupLabel}
-                  <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
+                  {groupRequired ? (
+                    <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
+                  ) : (
+                    <span style={{ fontWeight: 400, fontSize: "0.68rem", color: "hsl(var(--muted-foreground))", marginLeft: 6, letterSpacing: "normal", textTransform: "none" }}>(optional)</span>
+                  )}
                   {selected && !isColorGroup && (
                     <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 6 }}>— {selected.name}</span>
                   )}
@@ -675,18 +719,33 @@ const ProductDetail = () => {
                 >
                   {options.map((opt) => {
                     const isSelected = selected?.name === opt.name;
+                    const optDiff = region === "UK" ? (opt.price_diff_gbp ?? opt.price_diff ?? 0) : (opt.price_diff ?? 0);
+                    const toggleSelection = () => {
+                      setSelectedVariants((prev) => {
+                        // Optional groups can be deselected by clicking the
+                        // already-active option again; required groups always
+                        // keep something selected once chosen.
+                        if (isSelected && !groupRequired) {
+                          const next = { ...prev };
+                          delete next[groupLabel];
+                          return next;
+                        }
+                        return { ...prev, [groupLabel]: opt };
+                      });
+                      setErrorGroups((e) => e.filter((x) => x !== groupLabel));
+                    };
                     if (isColorGroup) {
                       return (
                         <button type="button" key={opt.name} title={opt.name}
-                          onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
+                          onClick={toggleSelection}
                           style={{ width: 32, height: 32, borderRadius: "50%", background: opt.name, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
                       );
                     }
                     return (
                       <button type="button" key={opt.name}
-                        onClick={() => { setSelectedVariants((prev) => ({ ...prev, [groupLabel]: opt })); setErrorGroups((e) => e.filter((x) => x !== groupLabel)); }}
+                        onClick={toggleSelection}
                         style={{ padding: "0.4rem 1rem", borderRadius: "2rem", fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", transition: "all 0.15s", border: "2px solid", borderColor: isSelected ? "hsl(var(--primary))" : "hsl(var(--border))", background: isSelected ? "hsl(var(--primary))" : "transparent", color: isSelected ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))" }}>
-                        {opt.name}{opt.price_diff !== 0 && <span style={{ fontSize: "0.68rem", marginLeft: 4, opacity: 0.75 }}>{region === "UK" ? `+£${opt.price_diff}` : `+Rs. ${opt.price_diff}`}</span>}
+                        {opt.name}{optDiff !== 0 && <span style={{ fontSize: "0.68rem", marginLeft: 4, opacity: 0.75 }}>{region === "UK" ? `+£${optDiff}` : `+Rs. ${optDiff}`}</span>}
                       </button>
                     );
                   })}
@@ -704,6 +763,14 @@ const ProductDetail = () => {
           {customInputs.length > 0 && (
             <div style={{ marginBottom: "1.75rem" }}>
               {customInputs.map((ci) => {
+                // Fields tied to a variant group (e.g. "Embroidered Text"
+                // only once "with text" is picked) stay hidden until that
+                // variant is actually selected.
+                if (ci.depends_on_group) {
+                  const picked = selectedVariants[ci.depends_on_group];
+                  const active = picked && (!ci.depends_on_option || picked.name === ci.depends_on_option);
+                  if (!active) return null;
+                }
                 const hasErr = customErrors.includes(ci.id);
                 return (
                   <div key={ci.id} style={{ marginBottom: "1.1rem" }}>

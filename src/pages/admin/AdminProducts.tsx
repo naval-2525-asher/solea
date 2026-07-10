@@ -19,7 +19,13 @@ import { useLocation } from "react-router-dom";
 import { useProducts, useUpsertProduct, useDeleteProduct, uploadFile } from "@/hooks/useAdminData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type VariantOption = { label: string; name: string; price_diff: number };
+type VariantOption = {
+  label: string;
+  name: string;
+  price_diff: number;       // PKR add-on
+  price_diff_gbp?: number;  // GBP add-on
+  required?: boolean;       // defaults to true (existing behaviour) if unset
+};
 type CustomInput = {
   id: string;
   label: string;
@@ -27,6 +33,10 @@ type CustomInput = {
   required: boolean;
   placeholder?: string;
   options?: string[];
+  // If set, this field only shows on the product page (and is only
+  // required) once the shopper has picked the matching variant group.
+  depends_on_group?: string;
+  depends_on_option?: string;
 };
 
 // ─── Fixed sizes — auto-applied on save, never shown in UI ───────────────────
@@ -172,9 +182,11 @@ export default function AdminProducts() {
   const [uploadingSgTank, setUploadingSgTank] = useState(false);
 
   // Variant draft
-  const [vLabel,     setVLabel]     = useState("Color");
-  const [vName,      setVName]      = useState("");
-  const [vPriceDiff, setVPriceDiff] = useState(0);
+  const [vLabel,        setVLabel]        = useState("Color");
+  const [vName,         setVName]         = useState("");
+  const [vPriceDiff,    setVPriceDiff]    = useState(0);
+  const [vPriceDiffGbp, setVPriceDiffGbp] = useState(0);
+  const [vRequired,     setVRequired]     = useState(true);
 
   // Custom input draft
   const [ciLabel,       setCiLabel]       = useState("");
@@ -182,6 +194,8 @@ export default function AdminProducts() {
   const [ciRequired,    setCiRequired]    = useState(false);
   const [ciPlaceholder, setCiPlaceholder] = useState("");
   const [ciOptions,     setCiOptions]     = useState("");
+  const [ciDependsGroup,  setCiDependsGroup]  = useState("");
+  const [ciDependsOption, setCiDependsOption] = useState("");
 
   // Which style tab is active in the per-style custom inputs section
   const [customInputTab, setCustomInputTab] = useState<"shared" | "tee" | "tank">("shared");
@@ -312,18 +326,23 @@ export default function AdminProducts() {
     if (!vName.trim()) return;
     setEditProduct((prev: any) => ({
       ...prev,
-      [field]: [...(prev[field] || []), { label: vLabel, name: vName.trim(), price_diff: vPriceDiff }],
+      [field]: [...(prev[field] || []), { label: vLabel, name: vName.trim(), price_diff: vPriceDiff, price_diff_gbp: vPriceDiffGbp, required: vRequired }],
     }));
-    setVName(""); setVPriceDiff(0);
+    setVName(""); setVPriceDiff(0); setVPriceDiffGbp(0); setVRequired(true);
   };
   const removeVariant = (idx: number, field: VField = "variants") =>
     setEditProduct((prev: any) => ({ ...prev, [field]: (prev[field] || []).filter((_: any, i: number) => i !== idx) }));
+  const updateVariant = (idx: number, patch: Partial<VariantOption>, field: VField = "variants") =>
+    setEditProduct((prev: any) => ({
+      ...prev,
+      [field]: (prev[field] || []).map((v: VariantOption, i: number) => (i === idx ? { ...v, ...patch } : v)),
+    }));
 
   const addPresetVariants = (presetName: string) => {
     const options = ACCESSORY_STYLE_PRESETS[presetName] || [];
     setEditProduct((prev: any) => ({
       ...prev,
-      variants: [...(prev.variants || []), ...options.map((name) => ({ label: "Style", name, price_diff: 0 }))],
+      variants: [...(prev.variants || []), ...options.map((name) => ({ label: "Style", name, price_diff: 0, price_diff_gbp: 0, required: true }))],
     }));
     toast.success(`Added ${options.length} style options`);
   };
@@ -336,9 +355,12 @@ export default function AdminProducts() {
       placeholder: ciPlaceholder.trim() || undefined,
       options: ciType === "select" || ciType === "color"
         ? ciOptions.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+      depends_on_group: ciDependsGroup.trim() || undefined,
+      depends_on_option: ciDependsGroup.trim() ? (ciDependsOption.trim() || undefined) : undefined,
     };
     setEditProduct((prev: any) => ({ ...prev, [field]: [...(prev[field] || []), ci] }));
     setCiLabel(""); setCiType("text"); setCiRequired(false); setCiPlaceholder(""); setCiOptions("");
+    setCiDependsGroup(""); setCiDependsOption("");
   };
   const removeCustomInput = (id: string, field: CiField = "custom_inputs") =>
     setEditProduct((prev: any) => ({ ...prev, [field]: (prev[field] || []).filter((c: CustomInput) => c.id !== id) }));
@@ -727,14 +749,29 @@ export default function AdminProducts() {
                 {(editProduct.variants || []).length > 0 && (
                   <div className="space-y-1.5">
                     {(editProduct.variants || []).map((v: VariantOption, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2 bg-secondary/40 rounded-lg px-3 py-2">
-                        {(v.label.toLowerCase() === "color" || v.label.toLowerCase() === "colour") && (
-                          <span style={{ width: 14, height: 14, borderRadius: "50%", background: v.name, border: "1px solid hsl(var(--border))", flexShrink: 0 }} />
-                        )}
-                        <span className="font-serif text-xs text-muted-foreground flex-shrink-0">{v.label}:</span>
-                        <span className="font-serif text-xs font-bold text-foreground flex-1">{v.name}</span>
-                        {v.price_diff !== 0 && <span className="font-serif text-xs text-muted-foreground">{v.price_diff > 0 ? "+" : ""}PKR {v.price_diff}</span>}
-                        <button type="button" onClick={() => removeVariant(idx)} className="w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
+                      <div key={idx} className="bg-secondary/40 rounded-lg px-3 py-2 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          {(v.label.toLowerCase() === "color" || v.label.toLowerCase() === "colour") && (
+                            <span style={{ width: 14, height: 14, borderRadius: "50%", background: v.name, border: "1px solid hsl(var(--border))", flexShrink: 0 }} />
+                          )}
+                          <span className="font-serif text-xs text-muted-foreground flex-shrink-0">{v.label}:</span>
+                          <span className="font-serif text-xs font-bold text-foreground flex-1">{v.name}</span>
+                          <button type="button" onClick={() => removeVariant(idx)} className="w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20 flex-shrink-0">✕</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-serif text-[10px] text-muted-foreground flex-shrink-0">PKR</span>
+                            <Input type="number" value={v.price_diff ?? 0} onChange={(e) => updateVariant(idx, { price_diff: Number(e.target.value) })} className="font-serif text-xs h-7" />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-serif text-[10px] text-muted-foreground flex-shrink-0">GBP</span>
+                            <Input type="number" value={v.price_diff_gbp ?? 0} onChange={(e) => updateVariant(idx, { price_diff_gbp: Number(e.target.value) })} className="font-serif text-xs h-7" />
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={v.required !== false} onChange={(e) => updateVariant(idx, { required: e.target.checked })} style={{ accentColor: "hsl(var(--primary))" }} />
+                          <span className="font-serif text-[10px] text-muted-foreground">Required — shopper must pick this before adding to cart</span>
+                        </label>
                       </div>
                     ))}
                   </div>
@@ -752,15 +789,30 @@ export default function AdminProducts() {
                       <Input value={vName} onChange={(e) => setVName(e.target.value)} placeholder="e.g. Rose Pink" className="font-serif text-xs h-8 mt-1" />
                     </div>
                   </div>
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label className="font-serif text-[10px]">Price diff (PKR, 0 = same)</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="font-serif text-[10px]">Price diff — PKR (0 = same)</Label>
                       <Input type="number" value={vPriceDiff} onChange={(e) => setVPriceDiff(Number(e.target.value))} className="font-serif text-xs h-8 mt-1" />
                     </div>
+                    <div>
+                      <Label className="font-serif text-[10px]">Price diff — GBP (0 = same)</Label>
+                      <Input type="number" value={vPriceDiffGbp} onChange={(e) => setVPriceDiffGbp(Number(e.target.value))} className="font-serif text-xs h-8 mt-1" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 font-serif text-[11px] text-muted-foreground cursor-pointer">
+                      <input type="checkbox" checked={vRequired} onChange={(e) => setVRequired(e.target.checked)} />
+                      Required — shopper must pick this before adding to cart
+                    </label>
                     <Button type="button" onClick={() => addVariant()} disabled={!vName.trim()} size="sm" className="font-serif h-8 text-xs">
                       <Plus className="h-3 w-3 mr-1" /> Add
                     </Button>
                   </div>
+                  {!vRequired && (
+                    <p className="font-serif text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      ⚠️ Unchecked = optional. Mark ALL options in this group as optional if you want shoppers to be able to skip it entirely (e.g. an add-on like "with text").
+                    </p>
+                  )}
                 </div>
               </div>
               )}
@@ -808,6 +860,38 @@ export default function AdminProducts() {
                           <input type="checkbox" checked={ci.required} onChange={(e) => updateCustomInput(ci.id, { required: e.target.checked })} style={{ accentColor: "hsl(var(--primary))" }} />
                           <span className="font-serif text-[11px] text-muted-foreground">Required field</span>
                         </label>
+                        {(editProduct.variants || []).length > 0 && (() => {
+                          const groupLabels: string[] = Array.from(new Set((editProduct.variants || []).map((v: VariantOption) => v.label).filter(Boolean)));
+                          const optionsInGroup: string[] = (editProduct.variants || [])
+                            .filter((v: VariantOption) => v.label === ci.depends_on_group)
+                            .map((v: VariantOption) => v.name);
+                          return (
+                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/60 mt-1">
+                              <div>
+                                <Label className="font-serif text-[10px]">Only show when variant is selected</Label>
+                                <Select value={ci.depends_on_group || "__none"} onValueChange={(v) => updateCustomInput(ci.id, { depends_on_group: v === "__none" ? undefined : v, depends_on_option: undefined })}>
+                                  <SelectTrigger className="font-serif text-xs h-7 mt-1"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none" className="font-serif">Always show</SelectItem>
+                                    {groupLabels.map((g) => <SelectItem key={g} value={g} className="font-serif">{g}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {ci.depends_on_group && (
+                                <div>
+                                  <Label className="font-serif text-[10px]">Specific option (optional)</Label>
+                                  <Select value={ci.depends_on_option || "__any"} onValueChange={(v) => updateCustomInput(ci.id, { depends_on_option: v === "__any" ? undefined : v })}>
+                                    <SelectTrigger className="font-serif text-xs h-7 mt-1"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__any" className="font-serif">Any option in group</SelectItem>
+                                      {optionsInGroup.map((n) => <SelectItem key={n} value={n} className="font-serif">{n}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -846,6 +930,38 @@ export default function AdminProducts() {
                       <Input value={ciOptions} onChange={(e) => setCiOptions(e.target.value)} placeholder={ciType === "color" ? "#FF6B9D, #C5A3C0" : "Option A, Option B"} className="font-serif text-xs h-8 mt-1" />
                     </div>
                   )}
+                  {(editProduct.variants || []).length > 0 && (() => {
+                    const groupLabels: string[] = Array.from(new Set((editProduct.variants || []).map((v: VariantOption) => v.label).filter(Boolean)));
+                    const optionsInGroup: string[] = (editProduct.variants || [])
+                      .filter((v: VariantOption) => v.label === ciDependsGroup)
+                      .map((v: VariantOption) => v.name);
+                    return (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="font-serif text-[10px]">Only show when variant is selected</Label>
+                          <Select value={ciDependsGroup || "__none"} onValueChange={(v) => { setCiDependsGroup(v === "__none" ? "" : v); setCiDependsOption(""); }}>
+                            <SelectTrigger className="font-serif text-xs h-8 mt-1"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none" className="font-serif">Always show</SelectItem>
+                              {groupLabels.map((g) => <SelectItem key={g} value={g} className="font-serif">{g}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {ciDependsGroup && (
+                          <div>
+                            <Label className="font-serif text-[10px]">Specific option (optional)</Label>
+                            <Select value={ciDependsOption || "__any"} onValueChange={(v) => setCiDependsOption(v === "__any" ? "" : v)}>
+                              <SelectTrigger className="font-serif text-xs h-8 mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__any" className="font-serif">Any option in group</SelectItem>
+                                {optionsInGroup.map((n) => <SelectItem key={n} value={n} className="font-serif">{n}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={ciRequired} onChange={(e) => setCiRequired(e.target.checked)} style={{ accentColor: "hsl(var(--primary))" }} />
