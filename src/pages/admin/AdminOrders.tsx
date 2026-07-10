@@ -143,6 +143,7 @@ export default function AdminOrders() {
               p_product_id: item.product_id,
               p_style: item.style,
               p_size: item.size && item.size !== "One Size" ? item.size : null,
+              p_color: item.color ?? null,
               p_qty: item.quantity,
             })
           )
@@ -158,6 +159,7 @@ export default function AdminOrders() {
               p_product_id: item.product_id,
               p_style: item.style,
               p_size: item.size && item.size !== "One Size" ? item.size : null,
+              p_color: item.color ?? null,
               p_qty: item.quantity,
             })
           )

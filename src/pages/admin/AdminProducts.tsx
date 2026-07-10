@@ -136,18 +136,12 @@ function ProductCard({ p, onEdit, onDelete }: { p: any; onEdit: (p: any) => void
 type VField  = "variants"     | "tee_variants"     | "tank_variants";
 type CiField = "custom_inputs" | "tee_custom_inputs" | "tank_custom_inputs";
 
-// Predefined color palette for Tee / Tank color pickers
+// Predefined color palette for the Tee color picker.
+// Tanks no longer have a color picker — that field/section has been removed.
 const PRESET_COLORS: { name: string; hex: string }[] = [
   { name: "Black",  hex: "#000000" },
   { name: "White",  hex: "#FFFFFF" },
-  { name: "Red",    hex: "#DC2626" },
-  { name: "Pink",   hex: "#F9A8D4" },
-  { name: "Yellow", hex: "#FDE047" },
-  { name: "Blue",   hex: "#3B82F6" },
-  { name: "Green",  hex: "#22C55E" },
-  { name: "Purple", hex: "#A855F7" },
 ];
-const OTHER_COLOR = { name: "Other", hex: "#D4A574" };
 
 export default function AdminProducts() {
   const { data: products = [], isLoading } = useProducts();
@@ -641,23 +635,23 @@ export default function AdminProducts() {
                   </div>
                 </div>
               )}
-              {/* ── COLOR OPTIONS (Tees & Tanks) ── */}
+              {/* ── COLOR OPTIONS (Tee only — tanks no longer have colors) ── */}
               {dialogSection !== "accessories" && (
                 <div className="space-y-4">
                   <SectionLabel>
                     Color Options
-                    <span className="normal-case font-normal text-[10px]"> — choose separately for Tee and Tank</span>
+                    <span className="normal-case font-normal text-[10px]"> — Tee only (Black &amp; White)</span>
                   </SectionLabel>
 
-                  {(["tee", "tank"] as const).map((style) => {
-                    const field = style === "tee" ? "tee_colors" : "tank_colors";
+                  {(() => {
+                    const field = "tee_colors";
                     const chosen: string[] = editProduct[field] || [];
-                    const label = style === "tee" ? "👕 Tee Colors" : "🎽 Tank Colors";
+                    const label = "👕 Tee Colors";
                     return (
-                      <div key={style} className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
+                      <div className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
                         <p className="font-serif text-xs font-bold text-foreground">{label}</p>
                         <div className="flex flex-wrap gap-2 items-center">
-                          {[...PRESET_COLORS, OTHER_COLOR].map((c) => {
+                          {PRESET_COLORS.map((c) => {
                             const active = chosen.includes(c.name);
                             return (
                               <button
@@ -706,7 +700,7 @@ export default function AdminProducts() {
                         )}
                       </div>
                     );
-                  })}
+                  })()}
                 </div>
               )}
 
