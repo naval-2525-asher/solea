@@ -68,14 +68,30 @@ const OrderModal = ({ order, onClose }: { order: any; onClose: () => void }) => 
 
       <h3 style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "0.85rem", color: "hsl(var(--foreground))", marginBottom: 8 }}>Items Ordered</h3>
       <div style={{ marginBottom: 12 }}>
-        {(order.items || []).map((item: any, i: number) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontFamily: "Georgia, serif", fontSize: "0.8rem", padding: "6px 0", borderBottom: "1px solid hsl(var(--border))" }}>
-            <span style={{ color: "hsl(var(--foreground))" }}>{item.name} · {item.size} × {item.quantity}</span>
-            <span style={{ fontWeight: 700, color: "hsl(var(--foreground))" }}>
-              {order.region === "UK" ? `£${(item.price * item.quantity).toLocaleString("en-GB")}` : `PKR ${(item.price * item.quantity).toLocaleString()}`}
-            </span>
-          </div>
-        ))}
+        {(order.items || []).map((item: any, i: number) => {
+          const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : item.style === "tank" ? "Tank" : null;
+          const custom = item.customisation && typeof item.customisation === "object" ? item.customisation : {};
+          const COLOR_LABELS = ["colour", "color", "tee color", "tank color"];
+          const colorVal = (custom as any)["Color"] || (custom as any)["Colour"] || item.color;
+          // Filter out all color keys (shown via colorVal) and keep the rest
+          const customEntries = Object.entries(custom).filter(([key, val]) =>
+            val && !COLOR_LABELS.includes(key.toLowerCase())
+          );
+          const details = [
+            typeLabel,
+            colorVal ? `Color: ${colorVal}` : null,
+            item.size,
+            ...customEntries.map(([key, val]) => `${key}: ${val}`),
+          ].filter(Boolean).join(" · ");
+          return (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontFamily: "Georgia, serif", fontSize: "0.8rem", padding: "6px 0", borderBottom: "1px solid hsl(var(--border))" }}>
+              <span style={{ color: "hsl(var(--foreground))" }}>{item.name}{details ? ` · ${details}` : ""} × {item.quantity}</span>
+              <span style={{ fontWeight: 700, color: "hsl(var(--foreground))" }}>
+                {order.region === "UK" ? `£${(item.price * item.quantity).toLocaleString("en-GB")}` : `PKR ${(item.price * item.quantity).toLocaleString()}`}
+              </span>
+            </div>
+          );
+        })}
         <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "0.9rem", paddingTop: 8, color: "hsl(var(--foreground))" }}>
           <span>Total</span>
           <span>{order.region === "UK" ? `£${Number(order.total).toLocaleString("en-GB")}` : `PKR ${Number(order.total).toLocaleString()}`}</span>
