@@ -47,7 +47,7 @@ const AccessoryDetail = () => {
 
   const rawProduct = dbProduct;
 
-  const { addToCart, items: cartItems } = useCart();
+  const { addToCart } = useCart();
   const { region, formatPrice } = useRegion();
   const { data: saleItems = [] } = useSaleProducts();
 
@@ -152,22 +152,18 @@ const AccessoryDetail = () => {
 
   const productIdForCart = (rawProduct as any)?.id ?? (typeof product.id === "number" ? product.id : 9001);
 
-  const inCartQty = (variantName: string): number =>
-    cartItems
-      .filter((i) => i.productId === productIdForCart && i.style === "accessory" && i.size === variantName)
-      .reduce((sum, i) => sum + i.quantity, 0);
-
-  // Per-variant stock (e.g. colour/style), isolated per option — falls back
-  // to the flat total when this accessory has no variant-level tracking.
   const getVariantStock = (variantName: string): number => getAccessoryVariantStock(rawProduct, variantName);
+
+  // Display stock — straight from DB, not reduced by cart contents.
+  // Stock only decrements when admin confirms an order.
   const remainingForVariant = (variantName: string): number => {
     const raw = getVariantStock(variantName);
-    return raw === Infinity ? Infinity : Math.max(0, raw - inCartQty(variantName));
+    return raw === Infinity ? Infinity : Math.max(0, raw);
   };
 
   const totalRemaining = (() => {
     const raw = getProductTotalStock(rawProduct);
-    return raw === Infinity ? Infinity : Math.max(0, raw - inCartQty("One Size"));
+    return raw === Infinity ? Infinity : Math.max(0, raw);
   })();
 
   // What's actually selectable right now, for low-stock / OOS messaging
