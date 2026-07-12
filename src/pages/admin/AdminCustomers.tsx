@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useOrders, useUpdateOrderStatus } from "@/hooks/useAdminData";
-import { ChevronDown, Mail } from "lucide-react";
+import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/useAdminData";
+import { ChevronDown, Mail, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 const SHIPPING_OPTIONS = [
@@ -111,6 +111,17 @@ const OrderModal = ({ order, onClose }: { order: any; onClose: () => void }) => 
 export default function AdminCustomers() {
   const { data: orders = [], isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
+  const deleteOrder  = useDeleteOrder();
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this customer and their confirmed order permanently? This cannot be undone.")) return;
+    try {
+      await deleteOrder.mutateAsync(id);
+      toast.success("Customer and their order deleted.");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
 
@@ -158,6 +169,7 @@ export default function AdminCustomers() {
                   <th className="text-left p-4 text-muted-foreground font-medium">Order</th>
                   <th className="text-left p-4 text-muted-foreground font-medium">Date</th>
                   <th className="text-left p-4 text-muted-foreground font-medium">Shipping Status</th>
+                  <th className="p-4" />
                 </tr>
               </thead>
               <tbody>
@@ -225,6 +237,17 @@ export default function AdminCustomers() {
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td className="p-4">
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          title="Delete order"
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", color: "hsl(var(--muted-foreground))", cursor: "pointer", transition: "all 0.15s" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#fee2e2"; (e.currentTarget as HTMLButtonElement).style.color = "#dc2626"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--muted-foreground))"; }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </td>
                     </tr>
                   );
