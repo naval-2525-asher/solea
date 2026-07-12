@@ -223,7 +223,7 @@ const Checkout = () => {
           product_id: item.productId,
           name: item.name,
           size: item.size,
-          color: item.customisation?.Color ?? item.customisation?.Colour ?? null,
+          color: item.customisation?.Color ?? item.customisation?.Colour ?? item.customisation?.Style ?? null,
           quantity: item.quantity,
           price: getItemPrice(item),
           style: item.style,

@@ -138,31 +138,33 @@ export default function AdminOrders() {
       // the checkout side touches inventory.
       if (status === "confirmed" && !wasAlreadyConfirmed && order?.items?.length) {
         await Promise.allSettled(
-          order.items.map((item: any) =>
-            (supabase as any).rpc("decrement_product_stock", {
+          order.items.map((item: any) => {
+            // For accessories, variant is stored as customisation.Style
+            const color = item.color ?? item.customisation?.Color ?? item.customisation?.Style ?? null;
+            return (supabase as any).rpc("decrement_product_stock", {
               p_product_id: item.product_id,
               p_style: item.style,
               p_size: item.size && item.size !== "One Size" ? item.size : null,
-              p_color: item.color ?? null,
+              p_color: color,
               p_qty: item.quantity,
-            })
-          )
+            });
+          })
         );
       }
 
       // ── Restore stock when order is cancelled ───────────────────────────
-      // Only restores if the order was previously confirmed (stock was taken).
       if (status === "cancelled" && !wasAlreadyCancelled && wasAlreadyConfirmed && order?.items?.length) {
         await Promise.allSettled(
-          order.items.map((item: any) =>
-            (supabase as any).rpc("increment_product_stock", {
+          order.items.map((item: any) => {
+            const color = item.color ?? item.customisation?.Color ?? item.customisation?.Style ?? null;
+            return (supabase as any).rpc("increment_product_stock", {
               p_product_id: item.product_id,
               p_style: item.style,
               p_size: item.size && item.size !== "One Size" ? item.size : null,
-              p_color: item.color ?? null,
+              p_color: color,
               p_qty: item.quantity,
-            })
-          )
+            });
+          })
         );
       }
 
