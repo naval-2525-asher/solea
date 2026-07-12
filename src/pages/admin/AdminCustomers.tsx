@@ -114,15 +114,11 @@ export default function AdminCustomers() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
 
-  // Only show VERIFIED customers (status !== pending and !== cancelled at top level)
-  // One row per customer email — most recent order
-  const customerMap: Record<string, any> = {};
-  (orders as any[])
+  // Show ALL verified (confirmed/shipped/delivered) orders — one row per order,
+  // not one per customer email. Multiple orders from the same person all appear.
+  const customers = (orders as any[])
     .filter((o: any) => o.status !== "pending" && o.status !== "cancelled")
-    .forEach((o: any) => {
-      if (!customerMap[o.email]) customerMap[o.email] = o;
-    });
-  const customers = Object.values(customerMap);
+    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const handleStatus = async (id: string, status: string, customer?: any) => {
     try {
@@ -139,7 +135,7 @@ export default function AdminCustomers() {
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl font-black text-foreground">Customers</h1>
         <span className="font-serif text-xs text-muted-foreground bg-secondary px-3 py-1 rounded-full">
-          Verified only — {customers.length} customer{customers.length !== 1 ? "s" : ""}
+          Verified only — {customers.length} order{customers.length !== 1 ? "s" : ""}
         </span>
       </div>
 
