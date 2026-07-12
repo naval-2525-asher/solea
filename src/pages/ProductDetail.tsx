@@ -630,13 +630,26 @@ const ProductDetail = () => {
                 {activeColors.map((colorName) => {
                   const hex = PRESET_COLOR_HEX[colorName] || "#888";
                   const isSelected = selectedColor === colorName;
-                  // If a size is selected and a color grid exists, use size+color stock
-                  // Otherwise fall back to the flat per-style color total
+                  const hasGrid = hasSizeColorGrid(dbProduct, effectiveType);
+
                   let colorStock: number;
-                  if (selectedSize && hasSizeColorGrid(dbProduct, effectiveType)) {
-                    const raw = getSizeColorStock(dbProduct, effectiveType, selectedSize, colorName);
-                    colorStock = raw === Infinity ? Infinity : Math.max(0, raw);
+                  if (hasGrid) {
+                    if (selectedSize) {
+                      // Size selected → check that exact size+color slot
+                      const raw = getSizeColorStock(dbProduct, effectiveType, selectedSize, colorName);
+                      colorStock = raw === Infinity ? Infinity : Math.max(0, raw);
+                    } else {
+                      // No size selected → sum across ALL sizes for this color
+                      // If total across all sizes is 0, the color is fully OOS
+                      const sizes = effectiveType === "tee" ? ["S","M","L","XL"] : ["S","M","L"];
+                      const total = sizes.reduce((sum, sz) => {
+                        const raw = getSizeColorStock(dbProduct, effectiveType, sz, colorName);
+                        return sum + (raw === Infinity ? 0 : raw);
+                      }, 0);
+                      colorStock = total;
+                    }
                   } else {
+                    // No grid — fall back to flat color stock map
                     const colorStockMap = effectiveType === "tee"
                       ? ((dbProduct as any)?.tee_color_stock || {})
                       : ((dbProduct as any)?.tank_color_stock || {});
