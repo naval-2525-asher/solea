@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/context/CartContext";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -197,12 +197,12 @@ const AccessoryDetail = () => {
       }
       const oosPicked = selectedMulti.filter((v) => remainingForVariant(v) <= 0);
       if (oosPicked.length > 0) {
-        toast({ title: `${oosPicked.join(", ")} ${oosPicked.length > 1 ? "are" : "is"} out of stock`, variant: "destructive" });
+        toast.error(`${oosPicked.join(", ")} ${oosPicked.length > 1 ? "are" : "is"} out of stock`);
         return;
       }
       const shortQty = selectedMulti.find((v) => remainingForVariant(v) < qty);
       if (shortQty) {
-        toast({ title: `Only ${remainingForVariant(shortQty)} of "${shortQty}" available`, variant: "destructive" });
+        toast.error(`Only ${remainingForVariant(shortQty)} of "${shortQty}" available`);
         return;
       }
       selectedMulti.forEach((variantName) => {
@@ -213,7 +213,7 @@ const AccessoryDetail = () => {
           ? (region === "UK" ? saleGbp : activeSalePrice)
           : getRegionPrice(basePrice);
         if (effectiveBaseRaw === null) {
-          toast({ title: "GBP price not set for this product. Please contact us.", variant: "destructive" });
+          toast.error("GBP price not set for this product. Please contact us.");
           return;
         }
         const effectiveBase = effectiveBaseRaw;
@@ -230,7 +230,7 @@ const AccessoryDetail = () => {
           });
         }
       });
-      toast({ title: `${selectedMulti.length * qty} item(s) added to cart!` });
+      toast(`${selectedMulti.length * qty} item(s) added to cart!`);
     } else if (hasVariants) {
       if (!selectedVariant) {
         setVariantError(true);
@@ -239,11 +239,11 @@ const AccessoryDetail = () => {
       }
       const remaining = remainingForVariant(selectedVariant);
       if (remaining <= 0) {
-        toast({ title: `${selectedVariant} is out of stock`, variant: "destructive" });
+        toast.error(`${selectedVariant} is out of stock`);
         return;
       }
       if (qty > remaining) {
-        toast({ title: `Only ${remaining} of "${selectedVariant}" available`, variant: "destructive" });
+        toast.error(`Only ${remaining} of "${selectedVariant}" available`);
         return;
       }
       const variantPriceDiff = selectedVariantObj?.price_diff || 0;
@@ -252,7 +252,7 @@ const AccessoryDetail = () => {
         ? (region === "UK" ? saleGbpV : activeSalePrice)
         : getRegionPrice(basePrice);
       if (effectiveBaseForVariantRaw === null) {
-        toast({ title: "GBP price not set for this product. Please contact us.", variant: "destructive" });
+        toast.error("GBP price not set for this product. Please contact us.");
         return;
       }
       const effectiveBaseForVariant = effectiveBaseForVariantRaw;
@@ -268,14 +268,14 @@ const AccessoryDetail = () => {
           customisation: { Style: selectedVariant },
         });
       }
-      toast({ title: `${product.name} (${selectedVariant}) added to cart!` });
+      toast(`${product.name} (${selectedVariant}) added to cart!`);
     } else {
       if (totalRemaining !== Infinity && totalRemaining <= 0) {
-        toast({ title: `${product.name} is out of stock`, variant: "destructive" });
+        toast.error(`${product.name} is out of stock`);
         return;
       }
       if (totalRemaining !== Infinity && qty > totalRemaining) {
-        toast({ title: `Only ${totalRemaining} available`, variant: "destructive" });
+        toast.error(`Only ${totalRemaining} available`);
         return;
       }
       const saleGbpNV = activeSalePriceGbp && activeSalePriceGbp > 0 ? activeSalePriceGbp : null;
@@ -283,7 +283,7 @@ const AccessoryDetail = () => {
         ? (region === "UK" ? saleGbpNV : activeSalePrice)
         : getRegionPrice(basePrice);
       if (effectiveBaseNoVariantRaw === null) {
-        toast({ title: "GBP price not set for this product. Please contact us.", variant: "destructive" });
+        toast.error("GBP price not set for this product. Please contact us.");
         return;
       }
       const effectiveBaseNoVariant = effectiveBaseNoVariantRaw;
@@ -298,7 +298,7 @@ const AccessoryDetail = () => {
           style: "accessory",
         });
       }
-      toast({ title: `${product.name} added to cart!` });
+      toast(`${product.name} added to cart!`);
     }
   };
 
