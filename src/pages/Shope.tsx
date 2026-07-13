@@ -36,7 +36,7 @@ const ProductCard = ({ product, showNewBadge = false, viewMode = "triple", saleP
           </div>
         )}
         {!oos && isLowStock(product) && (
-          <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, background: "#FEF08A", color: "#854D0E", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "11px", padding: "3px 10px", borderRadius: "999px", boxShadow: "0 1px 4px rgba(0,0,0,0.10)" }}>
+          <div style={{ position: "absolute", top: 8, left: 8, zIndex: 10, background: "#FEF08A", color: "#854D0E", fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: "11px", padding: "3px 10px", borderRadius: "999px", boxShadow: "0 1px 4px rgba(0,0,0,0.10)" }}>
             Few items left
           </div>
         )}

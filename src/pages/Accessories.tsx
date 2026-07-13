@@ -74,7 +74,7 @@ const ProductCard = ({
         {!oos && isLowStock(product) && (
           <div
             style={{
-              position: "absolute", top: 8, right: 8, zIndex: 10,
+              position: "absolute", top: 8, left: 8, zIndex: 10,
               background: "#FEF08A", color: "#854D0E",
               fontFamily: "Georgia, 'Times New Roman', serif",
               fontWeight: 700, fontSize: "11px", padding: "3px 10px",
