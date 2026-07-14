@@ -210,6 +210,7 @@ const ProductDetail = () => {
   // effectiveSelectedStock already computed above — alias for readability
   const selectedSizeStock = effectiveSelectedStock;
 
+  const needsSizeSelection = hasSizes && !selectedSize;
   const allSizesOOS = hasSizes && currentSizes.length > 0 && currentSizes.every((s: string) => getSizeStock(s) <= 0);
   const isLowStock = hasSizes
     ? (selectedSize ? (selectedSizeStock > 0 && selectedSizeStock <= LOW_STOCK_THRESHOLD) : false)
@@ -855,10 +856,10 @@ const ProductDetail = () => {
                     if (hasSizes && !selectedSize) { toast.error("Please select a size first"); return; }
                     const q = Math.max(1, quantity - 1); setQuantity(q); setQuantityError("");
                   }}
-                  disabled={hasSizes && !selectedSize}
-                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: hasSizes && !selectedSize ? "not-allowed" : "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: hasSizes && !selectedSize ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center", opacity: hasSizes && !selectedSize ? 0.4 : 1 }}
+                  disabled={needsSizeSelection}
+                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: needsSizeSelection ? "not-allowed" : "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: needsSizeSelection ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center", opacity: needsSizeSelection ? 0.4 : 1 }}
                 >−</button>
-                <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: hasSizes && !selectedSize ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", minWidth: 24, textAlign: "center", opacity: hasSizes && !selectedSize ? 0.4 : 1 }}>{quantity}</span>
+                <span style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "1rem", color: needsSizeSelection ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", minWidth: 24, textAlign: "center", opacity: needsSizeSelection ? 0.4 : 1 }}>{quantity}</span>
                 <button type="button"
                   onClick={() => {
                     if (hasSizes && !selectedSize) { toast.error("Please select a size first"); return; }
@@ -874,12 +875,14 @@ const ProductDetail = () => {
                     setQuantity(quantity + 1);
                     setQuantityError("");
                   }}
-                  disabled={hasSizes && !selectedSize}
-                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: hasSizes && !selectedSize ? "not-allowed" : "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: hasSizes && !selectedSize ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center", opacity: hasSizes && !selectedSize ? 0.4 : 1 }}
+                  disabled={needsSizeSelection}
+                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid hsl(var(--border))", background: "transparent", cursor: needsSizeSelection ? "not-allowed" : "pointer", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "1.1rem", color: needsSizeSelection ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))", display: "flex", alignItems: "center", justifyContent: "center", opacity: needsSizeSelection ? 0.4 : 1 }}
                 >+</button>
               </div>
               {hasSizes && !selectedSize && (
-                <p style={{ fontFamily: "Georgia, serif", fontSize: "0.72rem", color: "hsl(var(--muted-foreground))", marginTop: 6 }}>Select a size to set quantity</p>
+                <p style={{ fontFamily: "Georgia, serif", fontSize: "0.72rem", color: "hsl(var(--muted-foreground))", marginTop: 6 }}>
+                  {needsSizeSelection ? "Select a size" : "Select a color"} to set quantity
+                </p>
               )}
               {quantityError && (
                 <p style={{ fontFamily: "Georgia, serif", fontSize: "0.75rem", color: "#dc2626", marginTop: 6 }}>{quantityError}</p>

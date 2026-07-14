@@ -149,8 +149,8 @@ type CiField = "custom_inputs" | "tee_custom_inputs" | "tank_custom_inputs";
 // Predefined color palette for the Tee color picker.
 // Tanks no longer have a color picker — that field/section has been removed.
 const PRESET_COLORS: { name: string; hex: string }[] = [
-  { name: "Black",  hex: "#000000" },
-  { name: "White",  hex: "#FFFFFF" },
+  { name: "Black", hex: "#000000" },
+  { name: "White", hex: "#FFFFFF" },
 ];
 
 export default function AdminProducts() {
@@ -657,20 +657,20 @@ export default function AdminProducts() {
                   </div>
                 </div>
               )}
-              {/* ── COLOR OPTIONS (Tee only — tanks no longer have colors) ── */}
+              {/* ── COLOR OPTIONS (Tees & Tanks) — separate pickers ── */}
               {dialogSection !== "accessories" && (
                 <div className="space-y-4">
                   <SectionLabel>
                     Color Options
-                    <span className="normal-case font-normal text-[10px]"> — Tee only (Black &amp; White)</span>
+                    <span className="normal-case font-normal text-[10px]"> — choose separately for Tee and Tank</span>
                   </SectionLabel>
 
-                  {(() => {
-                    const field = "tee_colors";
+                  {(["tee", "tank"] as const).map((style) => {
+                    const field = style === "tee" ? "tee_colors" : "tank_colors";
                     const chosen: string[] = editProduct[field] || [];
-                    const label = "👕 Tee Colors";
+                    const label = style === "tee" ? "👕 Tee Colors" : "🎽 Tank Colors";
                     return (
-                      <div className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
+                      <div key={style} className="border border-border rounded-lg p-3 space-y-2 bg-secondary/10">
                         <p className="font-serif text-xs font-bold text-foreground">{label}</p>
                         <div className="flex flex-wrap gap-2 items-center">
                           {PRESET_COLORS.map((c) => {
@@ -703,7 +703,7 @@ export default function AdminProducts() {
                                     position: "absolute", inset: 0, display: "flex",
                                     alignItems: "center", justifyContent: "center",
                                     fontSize: 12, fontWeight: 900,
-                                    color: ["White", "Yellow", "Pink"].includes(c.name) ? "#000" : "#fff",
+                                    color: c.name === "White" ? "#000" : "#fff",
                                   }}>✓</span>
                                 )}
                               </button>
@@ -722,7 +722,7 @@ export default function AdminProducts() {
                         )}
                       </div>
                     );
-                  })()}
+                  })}
                 </div>
               )}
 
