@@ -1,7 +1,31 @@
 import { Link } from "react-router-dom";
 import { Instagram, Mail, MapPin } from "lucide-react";
+import { useCategories } from "@/hooks/useAdminData";
 
-const Footer = () => (
+const STATIC_LINKS_BEFORE = [{ label: "Home", to: "/" }];
+const STATIC_LINKS_AFTER = [
+  { label: "Sale",       to: "/sale"    },
+  { label: "FAQ",        to: "/faq"     },
+  { label: "Contact Us", to: "/contact" },
+];
+
+const Footer = () => {
+  const { data: dbCategories = [] } = useCategories();
+
+  // Same rule as the burger menu and home grid: live + coming soon, ordered
+  // by menu_order (falls back to display_order). Draft/Archived never show.
+  const categoryLinks = (dbCategories as any[])
+    .filter((cat) => cat.status === "live" || cat.status === "coming_soon")
+    .sort((a, b) => (a.menu_order ?? a.display_order ?? 0) - (b.menu_order ?? b.display_order ?? 0))
+    .map((cat) => ({
+      label: cat.name,
+      to: cat.is_legacy ? cat.legacy_href : `/category/${cat.slug}`,
+      comingSoon: cat.status === "coming_soon",
+    }));
+
+  const links = [...STATIC_LINKS_BEFORE, ...categoryLinks, ...STATIC_LINKS_AFTER];
+
+  return (
   <footer className="bg-primary text-primary-foreground font-serif" style={{ paddingTop: "56px", paddingBottom: "0" }}>
     <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 40px 48px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "40px" }}>
 
@@ -18,25 +42,29 @@ const Footer = () => (
       <div>
         <p style={{ fontSize: "11px", letterSpacing: "0.2em", opacity: 0.55, margin: "0 0 16px", textTransform: "uppercase" }}>Quick Links</p>
         <nav style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {[
-            { label: "Home",            to: "/"               },
-            { label: "Tanks & Tees",    to: "/shop"           },
-            { label: "Accessories",     to: "/accessories"    },
-            { label: "Limited Edition", to: "/limited-edition"},
-            { label: "Sale",            to: "/sale"           },
-            { label: "FAQ",             to: "/faq"            },
-            { label: "Contact Us",      to: "/contact"        },
-          ].map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              style={{ color: "inherit", textDecoration: "none", fontSize: "13px", opacity: 0.78, transition: "opacity 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.78")}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link: any) =>
+            link.comingSoon ? (
+              <span
+                key={link.to}
+                style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", opacity: 0.5 }}
+              >
+                {link.label}
+                <span style={{ background: "rgba(255,255,255,0.18)", fontSize: "9px", letterSpacing: "0.08em", padding: "2px 7px", borderRadius: "999px" }}>
+                  COMING SOON
+                </span>
+              </span>
+            ) : (
+              <Link
+                key={link.to}
+                to={link.to}
+                style={{ color: "inherit", textDecoration: "none", fontSize: "13px", opacity: 0.78, transition: "opacity 0.2s" }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.78")}
+              >
+                {link.label}
+              </Link>
+            )
+          )}
         </nav>
       </div>
 
@@ -88,6 +116,7 @@ const Footer = () => (
       © 2025 Soléa. All rights reserved.
     </div>
   </footer>
-);
+  );
+};
 
 export default Footer;
