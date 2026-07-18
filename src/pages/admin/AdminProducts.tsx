@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
-import { useProducts, useUpsertProduct, useDeleteProduct, uploadFile } from "@/hooks/useAdminData";
+import { useProducts, useUpsertProduct, useDeleteProduct, uploadFile, useCategories } from "@/hooks/useAdminData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type VariantOption = {
@@ -155,6 +155,17 @@ const PRESET_COLORS: { name: string; hex: string }[] = [
 
 export default function AdminProducts() {
   const { data: products = [], isLoading } = useProducts();
+  const { data: categoriesData = [] } = useCategories();
+  // Any category created via Admin → Categories that isn't one of the 4
+  // built-in ones and isn't archived — each gets its own section below.
+  // Only these 3 categories have a genuinely hardcoded admin section coded
+  // above. Bagcharms is a "built-in" storefront page (is_legacy=true) but has
+  // never had its own admin section — so it belongs in the dynamic list too,
+  // same as any brand-new category, until it's specifically coded for.
+  const HARDCODED_ADMIN_SECTIONS = ["Tees & Tank Tops", "Limited Edition", "Accessories"];
+  const customCategories = (categoriesData as any[]).filter(
+    (c) => !HARDCODED_ADMIN_SECTIONS.includes(c.name) && c.status !== "archived"
+  );
   const upsert    = useUpsertProduct();
   const deleteMut = useDeleteProduct();
   const { hash }  = useLocation();
@@ -164,11 +175,15 @@ export default function AdminProducts() {
   const limitedRef     = useRef<HTMLDivElement>(null);
   const accessoriesRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to section when hash changes
+  // Scroll to section when hash changes. Named refs cover the 4 built-in
+  // sections; any other hash (e.g. #cat-beaded-bags) falls back to looking
+  // up that id directly — used by dynamic categories, which don't get a
+  // hardcoded ref since they're created at runtime.
   useEffect(() => {
     const el = hash === "#tees-tanks" ? teesTanksRef.current
              : hash === "#limited"    ? limitedRef.current
              : hash === "#accessories" ? accessoriesRef.current
+             : hash ? document.getElementById(hash.slice(1))
              : null;
     if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }, [hash]);
@@ -208,11 +223,11 @@ export default function AdminProducts() {
   // Which section's "Add" was clicked — determines dialog mode
   const [dialogSection, setDialogSection] = useState<"tees-tanks" | "limited" | "accessories">("tees-tanks");
 
-  const openNew = (section: "tees-tanks" | "accessories" | "limited") => {
+  const openNew = (section: "tees-tanks" | "accessories" | "limited", categoryName?: string) => {
     setDialogSection(section);
     setEditProduct({
       ...emptyProduct,
-      category: section === "accessories" ? "Accessories" : section === "limited" ? "Limited Edition" : "Tees & Tank Tops",
+      category: categoryName || (section === "accessories" ? "Accessories" : section === "limited" ? "Limited Edition" : "Tees & Tank Tops"),
       display_order: products.length + 1,
     });
     setVDraftStyle(null);
@@ -221,7 +236,10 @@ export default function AdminProducts() {
   };
 
   const openEdit = (p: any) => {
-    const section = p.category === "Accessories" ? "accessories" : p.category === "Limited Edition" ? "limited" : "tees-tanks";
+    const customCat = customCategories.find((c: any) => c.name === p.category);
+    const section = customCat
+      ? (customCat.category_type === "accessory" ? "accessories" : "tees-tanks")
+      : p.category === "Accessories" ? "accessories" : p.category === "Limited Edition" ? "limited" : "tees-tanks";
     setDialogSection(section);
     setEditProduct({ ...p, images: p.images || [], variants: p.variants || [], tee_variants: p.tee_variants || [], tank_variants: p.tank_variants || [], tee_colors: p.tee_colors || [], tank_colors: p.tank_colors || [], custom_inputs: p.custom_inputs || [], tee_custom_inputs: p.tee_custom_inputs || [], tank_custom_inputs: p.tank_custom_inputs || [], size_guide_tee: p.size_guide_tee || "/images/size-guide-tees.png", size_guide_tank: p.size_guide_tank || "/images/size-guide-tanks.jpg", tee_description: p.tee_description || "", tank_description: p.tank_description || "" });
     setVDraftStyle(null);
@@ -371,9 +389,12 @@ export default function AdminProducts() {
     }));
 
   // ── Categorise ──
-  const teesAndTanks = products.filter((p: any) => p.category === "Tees & Tank Tops");
-  const limitedEdition = products.filter((p: any) => p.category === "Limited Edition");
-  const accessories  = products.filter((p: any) => p.category === "Accessories");
+  const activeCategoryNamesAdmin = new Set(
+    (categoriesData as any[]).filter((c) => c.status !== "archived").map((c) => c.name)
+  );
+  const teesAndTanks = products.filter((p: any) => p.category === "Tees & Tank Tops" && activeCategoryNamesAdmin.has(p.category));
+  const limitedEdition = products.filter((p: any) => p.category === "Limited Edition" && activeCategoryNamesAdmin.has(p.category));
+  const accessories  = products.filter((p: any) => p.category === "Accessories" && activeCategoryNamesAdmin.has(p.category));
 
   if (isLoading) return <div className="font-serif text-muted-foreground p-8">Loading products...</div>;
 
@@ -460,6 +481,43 @@ export default function AdminProducts() {
           </div>
         )}
       </div>
+
+      {customCategories.length > 0 && <div className="border-t border-border" />}
+
+      {/* ── Dynamic sections — one per category created in Admin → Categories ── */}
+      {customCategories.map((cat: any) => {
+        const catProducts = products.filter((p: any) => p.category === cat.name);
+        const section = cat.category_type === "accessory" ? "accessories" : "tees-tanks";
+        return (
+          <div key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="font-serif text-xl font-black text-foreground">
+                  {cat.category_type === "accessory" ? "✨" : "👕"} {cat.name}
+                </h2>
+                <span className="font-serif text-xs px-2.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                  {catProducts.length}
+                </span>
+                <span className="font-serif text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  {cat.status === "live" ? "Live" : cat.status === "coming_soon" ? "Coming Soon" : "Draft"}
+                </span>
+              </div>
+              <Button type="button" onClick={() => openNew(section, cat.name)} size="sm" className="font-serif gap-2">
+                <Plus className="h-4 w-4" /> Add {cat.name}
+              </Button>
+            </div>
+            {catProducts.length === 0 ? (
+              <p className="font-serif text-sm text-muted-foreground py-4">No products in {cat.name} yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {catProducts.map((p: any) => (
+                  <ProductCard key={p.id} p={p} onEdit={openEdit} onDelete={setDeleteId} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {/* ════════ ADD / EDIT DIALOG ════════ */}
       <Dialog open={open} onOpenChange={setOpen}>

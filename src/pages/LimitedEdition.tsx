@@ -23,7 +23,7 @@ const ProductCard = ({ product, viewMode = "triple" }: { product: any; viewMode?
   const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "400px" : "340px";
   const { formatPrice } = useRegion();
   return (
-    <Link to={`/product/${product.id}`} className="no-underline">
+    <Link to={`/product/${product.id}`} state={{ from: "/limited-edition" }} className="no-underline">
       <div
         className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative"
         style={{ opacity: oos ? 0.85 : 1 }}

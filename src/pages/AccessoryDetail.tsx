@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/context/CartContext";
@@ -9,7 +9,7 @@ import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRegion } from "@/context/RegionContext";
 import { getAccessoryVariantStock, getProductTotalStock, LOW_STOCK_THRESHOLD } from "@/lib/inventory";
-import { useSaleProducts } from "@/hooks/useAdminData";
+import { useSaleProducts, useCategories } from "@/hooks/useAdminData";
 
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -34,6 +34,7 @@ const QuantityStepper = ({ value, onChange, max }: { value: number; onChange: (v
 
 const AccessoryDetail = () => {
   const { id } = useParams();
+  const location = useLocation();
 
   const { data: dbProduct, isLoading } = useQuery({
     queryKey: ["product", id],
@@ -50,6 +51,8 @@ const AccessoryDetail = () => {
   const { addToCart } = useCart();
   const { region, formatPrice } = useRegion();
   const { data: saleItems = [] } = useSaleProducts();
+  const { data: categoriesForBack = [] } = useCategories();
+  const [descOpen, setDescOpen] = useState(false);
 
   // Find if this product is on sale
   const saleEntry = (saleItems as any[]).find((s: any) => String(s.product_id) === String(id));
@@ -118,12 +121,17 @@ const AccessoryDetail = () => {
   const allImages = product.images;
   const hasVariants = product.variants.length > 0;
 
-  const variantGroups: Record<string, { name: string; price_diff: number }[]> = {};
+  const variantGroups: Record<string, { name: string; price_diff: number; required?: boolean }[]> = {};
   product.variants.forEach((v: any) => {
     if (!variantGroups[v.label]) variantGroups[v.label] = [];
-    variantGroups[v.label].push({ name: v.name, price_diff: v.price_diff || 0 });
+    variantGroups[v.label].push({ name: v.name, price_diff: v.price_diff || 0, required: v.required });
   });
   const groupKeys = Object.keys(variantGroups);
+  // A group is optional only if every option in it was explicitly marked not
+  // required — same rule as the wearable product page, so admin behavior is
+  // consistent everywhere.
+  const isGroupRequired = (label: string) => !variantGroups[label].every((o) => o.required === false);
+  const requiredGroupKeys = groupKeys.filter(isGroupRequired);
   const isMultiSelect = product.variants.length > 4;
 
   const toggleMulti = (v: string) => {
@@ -189,6 +197,21 @@ const AccessoryDetail = () => {
   };
 
   const handleAdd = () => {
+    // Validate every required variant group actually has a selection.
+    // (This component uses a single shared selection value/list across all
+    // groups, so this only reliably distinguishes required vs optional when
+    // there's one group — the common case for accessories today.)
+    if (hasVariants && requiredGroupKeys.length > 0) {
+      const selectedNames = isMultiSelect ? selectedMulti : (selectedVariant ? [selectedVariant] : []);
+      const missingRequired = requiredGroupKeys.some(
+        (label) => !variantGroups[label].some((o) => selectedNames.includes(o.name))
+      );
+      if (missingRequired) {
+        setVariantError(true);
+        triggerShake();
+        return;
+      }
+    }
     if (isMultiSelect) {
       if (selectedMulti.length === 0) {
         setVariantError(true);
@@ -320,7 +343,13 @@ const AccessoryDetail = () => {
       <Navbar />
 
       <div className="px-10 pt-6">
-        <Link to="/accessories" className="text-foreground font-serif text-sm no-underline flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
+        <Link
+          to={location.state?.from || (() => {
+            const cat = (categoriesForBack as any[]).find((c) => c.name === (rawProduct as any)?.category);
+            if (cat) return cat.is_legacy ? cat.legacy_href : `/category/${cat.slug}`;
+            return (rawProduct as any)?.category === "Bagcharms" ? "/bagcharms" : "/accessories";
+          })()}
+          className="text-foreground font-serif text-sm no-underline flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
           ← Back
         </Link>
       </div>
@@ -431,7 +460,11 @@ const AccessoryDetail = () => {
             <div key={label} className="mb-6">
               <p className="text-foreground font-serif text-sm font-bold tracking-wider mb-3">
                 {label}
-                <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
+                {isGroupRequired(label) ? (
+                  <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
+                ) : (
+                  <span className="font-normal opacity-50 text-xs ml-2">(optional)</span>
+                )}
                 {isMultiSelect && <span className="font-normal opacity-50 text-xs ml-2">(select multiple)</span>}
               </p>
               <div
@@ -522,7 +555,14 @@ const AccessoryDetail = () => {
           {/* Description */}
           {product.description && (
             <div className="border-t border-border mt-6">
-              <p className="text-foreground font-serif text-sm leading-relaxed opacity-75 pt-4">{product.description}</p>
+              <button type="button" onClick={() => setDescOpen((p) => !p)}
+                className="w-full bg-transparent border-none py-4 flex justify-between items-center cursor-pointer text-foreground font-serif text-base font-bold">
+                Description
+                <span className="text-xl transition-transform duration-200" style={{ transform: descOpen ? "rotate(180deg)" : "rotate(0)" }}>⌄</span>
+              </button>
+              {descOpen && (
+                <p className="text-foreground font-serif text-sm leading-relaxed opacity-75 pb-4">{product.description}</p>
+              )}
             </div>
           )}
         </div>

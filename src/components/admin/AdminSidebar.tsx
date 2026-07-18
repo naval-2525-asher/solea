@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { LayoutDashboard, ShoppingCart, Users, Package, LogOut, Star, Layout, Camera, Boxes, Settings, ChevronDown } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Users, Package, LogOut, Star, Layout, Camera, Boxes, Settings, ChevronDown, Tags } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useCategories } from "@/hooks/useAdminData";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
@@ -19,10 +20,20 @@ export function AdminSidebar() {
   const [productsOpen, setProductsOpen] = useState(isProductsActive);
   const [inventoryOpen, setInventoryOpen] = useState(isInventoryActive);
 
+  const { data: categories = [] } = useCategories();
+  // Only these 3 have a genuinely hardcoded admin section — Bagcharms is a
+  // built-in storefront page but was never given its own admin section, so
+  // it needs to appear here too, same as any brand-new category.
+  const HARDCODED_ADMIN_SECTIONS = ["Tees & Tank Tops", "Limited Edition", "Accessories"];
+  const dynamicCategories = (categories as any[])
+    .filter((c) => !HARDCODED_ADMIN_SECTIONS.includes(c.name) && c.status !== "archived")
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+
   const topItems = [
     { title: "Overview",   url: "/admin",           icon: LayoutDashboard, end: true },
     { title: "Orders",     url: "/admin/orders",    icon: ShoppingCart },
     { title: "Customers",  url: "/admin/customers", icon: Users },
+    { title: "Categories", url: "/admin/categories", icon: Tags },
   ];
 
   const bottomItems = [
@@ -137,6 +148,15 @@ export function AdminSidebar() {
                     >
                       💎 Accessories
                     </button>
+                    {dynamicCategories.map((cat: any) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => navigate(`/admin/products#cat-${cat.slug}`)}
+                        className={`${subLinkClass} ${hash === `#cat-${cat.slug}` && isProductsActive ? activeSubLinkClass : ""}`}
+                      >
+                        {cat.category_type === "accessory" ? "✨" : "👕"} {cat.name}
+                      </button>
+                    ))}
                   </div>
                 )}
               </SidebarMenuItem>
@@ -185,6 +205,15 @@ export function AdminSidebar() {
                     >
                       💎 Accessories
                     </button>
+                    {dynamicCategories.map((cat: any) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => navigate(`/admin/inventory#cat-${cat.slug}`)}
+                        className={`${subLinkClass} ${hash === `#cat-${cat.slug}` && isInventoryActive ? activeSubLinkClass : ""}`}
+                      >
+                        {cat.category_type === "accessory" ? "✨" : "👕"} {cat.name}
+                      </button>
+                    ))}
                   </div>
                 )}
               </SidebarMenuItem>

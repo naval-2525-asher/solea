@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { useHeroBanners, useReviews, useNewArrivals, useBestSellers, useSpottedImages, useSaleProducts, useSiteSettings } from "@/hooks/useAdminData";
+import { useHeroBanners, useReviews, useNewArrivals, useBestSellers, useSpottedImages, useSaleProducts, useSiteSettings, useCategories, useActiveCategoryNames } from "@/hooks/useAdminData";
+import { getShowNewBadge } from "@/pages/admin/AdminCategories";
 import RegionGate from "@/components/RegionGate";
 import { useRegion } from "@/context/RegionContext";
 
@@ -63,12 +64,14 @@ const Reveal = ({ children, delay = 0, direction = "up", className, style }: Rev
   );
 };
 
-// Categories are defined statically but images come from admin settings
-const CATEGORY_DEFS = [
-  { name: "Tees & Tank Tops", desc: "Hand embroidered beaded tees and tanks", href: "/shop", settingKey: "category_image_tees" },
-  { name: "Limited Edition", desc: "One-of-a-kind exclusive pieces", href: "/limited-edition", settingKey: "category_image_limited" },
-  { name: "Accessories", desc: "Beaded charms, keychains & more", href: "/accessories", settingKey: "category_image_accessories" },
-];
+// Legacy categories (Tees & Tanks, Limited Edition, Accessories, Bagcharms)
+// still get their image from these site-setting keys if the categories
+// table row hasn't been given its own image yet — kept for backward compat.
+const LEGACY_SETTING_KEY: Record<string, string> = {
+  "Tees & Tank Tops": "category_image_tees",
+  "Limited Edition": "category_image_limited",
+  "Accessories": "category_image_accessories",
+};
 
 const fallbackSpotted = [
   "/images/spotted/spotted-1.png", "/images/spotted/spotted-2.png",
@@ -215,10 +218,14 @@ const SpottedSection = () => {
 // ── Product Card ──────────────────────────────────────────────────────────────
 const ProductCard = ({ product, salePrice, salePriceGbp }: { product: any; salePrice?: number; salePriceGbp?: number }) => {
   const { formatPrice, region } = useRegion();
-  const href = product.category === "Accessories" || product.category === "Bagcharms"
+  // Any accessory-type category (built-in or newly created) goes to the
+  // proven AccessoryDetail page; wearable-type goes to the generic one.
+  const { data: categoriesForCard = [] } = useCategories();
+  const isAccessoryType = (categoriesForCard as any[]).find((c) => c.name === product.category)?.category_type === "accessory";
+  const href = isAccessoryType || product.category === "Accessories" || product.category === "Bagcharms"
     ? `/accessories/${product.id}` : `/product/${product.id}`;
   return (
-    <Link to={href} className="no-underline" style={{ display: "block", width: "100%" }}>
+    <Link to={href} state={{ from: "/" }} className="no-underline" style={{ display: "block", width: "100%" }}>
       <div className="bg-solea-warm rounded-2xl overflow-hidden cursor-pointer transition-transform duration-200 hover:scale-105 border border-border shadow-sm" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ width: "100%", aspectRatio: "3 / 4", overflow: "hidden", flexShrink: 0, position: "relative" }}>
           {(product.image || product.images?.[0]) ? (
@@ -469,17 +476,38 @@ const Home = () => {
 
   const { data: banners = [] } = useHeroBanners();
   const { data: reviews = [] } = useReviews();
-  const { data: newArrivals = [] } = useNewArrivals();
-  const { data: bestSellers = [] } = useBestSellers();
-  const { data: saleItems = [] } = useSaleProducts();
+  const { data: newArrivalsRaw = [] } = useNewArrivals();
+  const { data: bestSellersRaw = [] } = useBestSellers();
+  const { data: saleItemsRaw = [] } = useSaleProducts();
+  const activeCategoryNames = useActiveCategoryNames();
+  // Archiving or deleting a category hides its products from every
+  // customer-facing surface, including these curated home page rows.
+  const newArrivals = (newArrivalsRaw as any[]).filter((row) => activeCategoryNames.has(row.products?.category));
+  const bestSellers = (bestSellersRaw as any[]).filter((row) => activeCategoryNames.has(row.products?.category));
+  const saleItems = (saleItemsRaw as any[]).filter((row) => activeCategoryNames.has(row.products?.category));
   const { data: settings = [] } = useSiteSettings();
+  const { data: dbCategories = [] } = useCategories();
 
-  // Build categories with images from admin settings (fall back to defaults)
-  const categories = CATEGORY_DEFS.map((cat) => ({
-    ...cat,
-    image: (settings as any[]).find((s: any) => s.key === cat.settingKey)?.value
-      || DEFAULT_CATEGORY_IMAGES[cat.settingKey],
-  }));
+  // Home grid tiles: any category that's Live or Coming Soon, in display
+  // order. Draft/Archived categories never show up here. Legacy categories
+  // (Tees & Tanks, Limited Edition, Accessories, Bagcharms) fall back to
+  // their old site-setting image if the category row itself has none yet.
+  const categories = (dbCategories as any[])
+    .filter((cat) => cat.status === "live" || cat.status === "coming_soon")
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    .map((cat) => ({
+      name: cat.name,
+      desc: cat.description || "",
+      href: cat.is_legacy ? cat.legacy_href : `/category/${cat.slug}`,
+      comingSoon: cat.status === "coming_soon",
+      isNew: getShowNewBadge(cat),
+      image:
+        cat.image_url ||
+        (LEGACY_SETTING_KEY[cat.name]
+          ? (settings as any[]).find((s: any) => s.key === LEGACY_SETTING_KEY[cat.name])?.value
+              || DEFAULT_CATEGORY_IMAGES[LEGACY_SETTING_KEY[cat.name]]
+          : undefined),
+    }));
 
   useEffect(() => {
     const FADE_START_MS = 400;
@@ -554,22 +582,49 @@ const Home = () => {
             <h2 className="text-center text-foreground font-serif text-4xl font-black mb-2">Shop by Category</h2>
             <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mt-4 mb-12">find your perfect piece</p>
           </Reveal>
-          <div className="grid gap-6 max-w-[1000px] mx-auto" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}>
-            {categories.map((cat, i) => (
-              <Reveal key={cat.name} delay={i * 100} direction="up">
-                <Link to={cat.href} className="no-underline">
-                  <div className="rounded-2xl overflow-hidden cursor-pointer transition-transform duration-200 hover:scale-105" style={{ background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 30px, hsl(var(--solea-beige)) 30px, hsl(var(--solea-beige)) 60px)" }}>
-                    <div className="h-[280px] p-3 pb-0">
-                      <img src={cat.image} alt={cat.name} className="w-full h-full object-cover rounded-xl" loading="lazy" />
+          <div
+            className="grid gap-6 max-w-[1000px] mx-auto"
+            style={{
+              gridTemplateColumns:
+                categories.length > 3
+                  ? "repeat(2, 1fr)" // 2 per row once there's more than 3
+                  : "repeat(auto-fill, minmax(250px, 1fr))",
+            }}
+          >
+            {categories.map((cat, i) => {
+              const tile = (
+                <div
+                  className={`rounded-2xl overflow-hidden relative transition-transform duration-200 ${cat.comingSoon ? "" : "cursor-pointer hover:scale-105"}`}
+                  style={{
+                    background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 30px, hsl(var(--solea-beige)) 30px, hsl(var(--solea-beige)) 60px)",
+                    opacity: cat.comingSoon ? 0.75 : 1,
+                  }}
+                >
+                  {cat.isNew && (
+                    <div className="absolute top-4 left-4 z-10 bg-destructive text-white font-serif font-black text-[10px] tracking-[0.15em] uppercase px-2.5 py-1 rounded-full">
+                      New
                     </div>
-                    <div className="py-5 px-5">
-                      <p className="text-foreground font-serif font-black text-xl">{cat.name}</p>
-                      <p className="text-foreground font-serif text-sm mt-1.5 opacity-75">{cat.desc}</p>
+                  )}
+                  {cat.comingSoon && (
+                    <div className="absolute top-4 left-4 z-10 bg-foreground/85 text-background font-serif font-black text-[10px] tracking-[0.15em] uppercase px-2.5 py-1 rounded-full">
+                      Coming Soon
                     </div>
+                  )}
+                  <div className="h-[280px] p-3 pb-0" style={{ filter: cat.comingSoon ? "grayscale(0.3)" : "none" }}>
+                    <img src={cat.image} alt={cat.name} className="w-full h-full object-cover rounded-xl" loading="lazy" />
                   </div>
-                </Link>
-              </Reveal>
-            ))}
+                  <div className="py-5 px-5">
+                    <p className="text-foreground font-serif font-black text-xl">{cat.name}</p>
+                    <p className="text-foreground font-serif text-sm mt-1.5 opacity-75">{cat.desc}</p>
+                  </div>
+                </div>
+              );
+              return (
+                <Reveal key={cat.name} delay={i * 100} direction="up">
+                  {cat.comingSoon ? tile : <Link to={cat.href} className="no-underline">{tile}</Link>}
+                </Reveal>
+              );
+            })}
           </div>
         </section>
 

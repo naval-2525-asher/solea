@@ -75,6 +75,84 @@ export function useDeleteProduct() {
   });
 }
 
+// ─── Categories ───
+// Powers Admin → Categories, the home page grid, the burger menu, the
+// Category picker in Admin → Products, and Inventory grouping.
+export function useCategories() {
+  return useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("categories")
+        .select("*")
+        .order("display_order");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useUpsertCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (category: any) => {
+      const { data, error } = await (supabase as any)
+        .from("categories")
+        .upsert({ ...category, updated_at: new Date().toISOString() })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
+// Soft-delete: flips status to "archived" instead of removing the row, so
+// any products still tagged with this category keep their data and the
+// category can be restored later by changing its status back.
+export function useArchiveCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from("categories")
+        .update({ status: "archived", updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
+// Hard delete — only offered in the admin UI for categories with zero
+// products tagged against them (e.g. cleaning up a mistaken entry).
+export function useDeleteCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
+// Category names that are NOT archived — i.e. still visible anywhere.
+// A hard-deleted category simply won't appear in `categories` at all, so it's
+// automatically excluded here too, giving archive and delete the exact same
+// "hide everywhere" effect without any extra bookkeeping.
+export function useActiveCategoryNames() {
+  const { data: categories = [] } = useCategories();
+  return new Set((categories as any[]).filter((c) => c.status !== "archived").map((c) => c.name));
+}
+
 // ─── Reviews ───
 export function useReviews() {
   return useQuery({

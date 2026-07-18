@@ -7,7 +7,7 @@ import { useRegion } from "@/context/RegionContext";
 const ProductCard = ({ product }: { product: any }) => {
   const { formatPrice } = useRegion();
   return (
-  <Link to={`/accessories/${product.id}`} className="no-underline">
+  <Link to={`/accessories/${product.id}`} state={{ from: "/bagcharms" }} className="no-underline">
     <div className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
       <div className="h-[290px] bg-solea-warm flex items-center justify-center overflow-hidden">
         <img

@@ -13,6 +13,7 @@ import Bagcharms from "./pages/Bagcharms";
 import LimitedEdition from "./pages/LimitedEdition";
 import Accessories from "./pages/Accessories";
 import AccessoryDetail from "./pages/AccessoryDetail";
+import CategoryPage from "./pages/CategoryPage";
 import ProductDetail from "./pages/ProductDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
@@ -22,6 +23,7 @@ import AdminLayout from "./components/admin/AdminLayout";
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminCustomers from "./pages/admin/AdminCustomers";
+import AdminCategories from "./pages/admin/AdminCategories";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminReviews from "./pages/admin/AdminReviews";
 import AdminSpotted from "./pages/admin/AdminSpotted";
@@ -101,6 +103,7 @@ const App = () => (
               <Route path="/limited-edition" element={<LimitedEdition />} />
               <Route path="/accessories" element={<Accessories />} />
               <Route path="/accessories/:id" element={<AccessoryDetail />} />
+              <Route path="/category/:slug" element={<CategoryPage />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
@@ -111,6 +114,7 @@ const App = () => (
                 <Route index element={<AdminOverview />} />
                 <Route path="orders" element={<AdminOrders />} />
                 <Route path="customers" element={<AdminCustomers />} />
+                <Route path="categories" element={<AdminCategories />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="reviews" element={<AdminReviews />} />
                 <Route path="spotted" element={<AdminSpotted />} />

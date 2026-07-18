@@ -35,7 +35,7 @@ const ProductCard = ({
   const { formatPrice, region } = useRegion();
 
   return (
-    <Link to={`/product/${product.id}`} className="no-underline">
+    <Link to={`/product/${product.id}`} state={{ from: "/shop" }} className="no-underline">
       <div
         className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative"
         style={{ opacity: oos ? 0.85 : 1 }}

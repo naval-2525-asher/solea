@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useSaleProducts, useSiteSettings } from "@/hooks/useAdminData";
+import { useSaleProducts, useSiteSettings, useCategories, useActiveCategoryNames } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useRegion } from "@/context/RegionContext";
@@ -19,13 +19,18 @@ const SaleCard = ({ item }: { item: any }) => {
   const oos = isOutOfStock(product);
   const { formatPrice, region } = useRegion();
   const discount = calcDiscount(item, region);
+  // Any accessory-type category (built-in or newly created in Admin →
+  // Categories) goes to the proven AccessoryDetail page; wearable-type goes
+  // to the generic ProductDetail page.
+  const { data: categories = [] } = useCategories();
+  const isAccessoryType = (categories as any[]).find((c) => c.name === product.category)?.category_type === "accessory";
   const href =
-    product.category === "Accessories" || product.category === "Bagcharms"
+    isAccessoryType || product.category === "Accessories" || product.category === "Bagcharms"
       ? `/accessories/${product.id}`
       : `/product/${product.id}`;
 
   return (
-    <Link to={href} className="no-underline">
+    <Link to={href} state={{ from: "/sale" }} className="no-underline">
       <div
         className="bg-card rounded-lg overflow-hidden cursor-pointer border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative"
         style={{ opacity: oos ? 0.85 : 1 }}
@@ -86,7 +91,9 @@ const SaleCard = ({ item }: { item: any }) => {
 };
 
 const Sale = () => {
-  const { data: saleItems = [], isLoading } = useSaleProducts();
+  const { data: saleItemsRaw = [], isLoading } = useSaleProducts();
+  const activeCategoryNames = useActiveCategoryNames();
+  const saleItems = (saleItemsRaw as any[]).filter((item) => activeCategoryNames.has(item.products?.category));
   const { data: settings = [] } = useSiteSettings();
   const isLive = (settings as any[]).find((s: any) => s.key === "sale_live")?.value === "true";
   const activeSaleItems = saleItems.filter((s: any) => s.products);

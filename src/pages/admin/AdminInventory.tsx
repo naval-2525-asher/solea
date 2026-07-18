@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useProducts } from "@/hooks/useAdminData";
+import { useProducts, useCategories } from "@/hooks/useAdminData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Save, AlertTriangle, CheckCircle, XCircle, ChevronDown, AlertCircle } from "lucide-react";
@@ -138,12 +138,12 @@ function SizeInputs({ sizes, sizeStock, onChange }: {
   );
 }
 
-function SectionDropdown({ title, count, sectionRef, defaultOpen = true, children }: {
-  title: string; count?: number; sectionRef?: React.RefObject<HTMLDivElement>; defaultOpen?: boolean; children: React.ReactNode;
+function SectionDropdown({ title, count, sectionRef, defaultOpen = true, children, id }: {
+  title: string; count?: number; sectionRef?: React.RefObject<HTMLDivElement>; defaultOpen?: boolean; children: React.ReactNode; id?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div ref={sectionRef} className="scroll-mt-6 bg-card border border-border rounded-xl overflow-hidden">
+    <div ref={sectionRef} id={id} className="scroll-mt-6 bg-card border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-secondary/20 transition-colors"
@@ -166,6 +166,17 @@ function SectionDropdown({ title, count, sectionRef, defaultOpen = true, childre
 
 export default function AdminInventory() {
   const { data: products = [], isLoading, refetch } = useProducts();
+  const { data: categoriesData = [] } = useCategories();
+  // Any category created in Admin → Categories (not one of the 4 built-in
+  // ones, not archived) gets its own inventory section automatically —
+  // no manual linking step needed.
+  // Only these 3 categories have a genuinely hardcoded inventory section
+  // coded above. Bagcharms is a "built-in" storefront page but has never had
+  // its own inventory section, so it belongs in the dynamic list too.
+  const HARDCODED_ADMIN_SECTIONS = ["Tees & Tank Tops", "Limited Edition", "Accessories"];
+  const customCategories = (categoriesData as any[]).filter(
+    (c) => !HARDCODED_ADMIN_SECTIONS.includes(c.name) && c.status !== "archived"
+  );
   const [edits,        setEdits]        = useState<Record<string, EditRow>>({});
   const [saving,       setSaving]       = useState<string | null>(null);
   const [filter,       setFilter]       = useState<"all" | "in_stock" | "low_stock" | "out_of_stock">("all");
@@ -181,6 +192,7 @@ export default function AdminInventory() {
       ? teesTanksRef.current
       : hash === "#accessories" ? accessoriesRef.current
       : (hash === "#limited" || hash === "#limited-edition") ? limitedRef.current
+      : hash ? document.getElementById(hash.slice(1))
       : null;
     if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }, [hash]);
@@ -408,9 +420,12 @@ export default function AdminInventory() {
     }
   };
 
-  const teesAndTanks   = (products as any[]).filter((p) => p.category === "Tees & Tank Tops");
-  const limitedEdition = (products as any[]).filter((p) => p.category === "Limited Edition");
-  const accessories    = (products as any[]).filter((p) => p.category === "Accessories");
+  const activeCategoryNamesAdmin = new Set(
+    (categoriesData as any[]).filter((c) => c.status !== "archived").map((c) => c.name)
+  );
+  const teesAndTanks   = (products as any[]).filter((p) => p.category === "Tees & Tank Tops" && activeCategoryNamesAdmin.has(p.category));
+  const limitedEdition = (products as any[]).filter((p) => p.category === "Limited Edition" && activeCategoryNamesAdmin.has(p.category));
+  const accessories    = (products as any[]).filter((p) => p.category === "Accessories" && activeCategoryNamesAdmin.has(p.category));
 
   const applyFilter = (list: any[]) =>
     list.filter((p: any) =>
@@ -737,6 +752,10 @@ export default function AdminInventory() {
   const filteredTeeTank     = applyFilter(teesAndTanks);
   const filteredLimited     = applyFilter(limitedEdition);
   const filteredAccessories = applyFilter(accessories);
+  const customCategoryProducts = customCategories.map((cat: any) => ({
+    cat,
+    list: applyFilter((products as any[]).filter((p) => p.category === cat.name)),
+  }));
 
   return (
     <div className="space-y-6">
@@ -870,6 +889,41 @@ export default function AdminInventory() {
           </table>
         </div>
       </SectionDropdown>
+
+      {/* ── Dynamic sections — one per category created in Admin → Categories.
+          Wearable-type categories reuse the tee/tank size-grid row; Accessory-
+          type categories reuse the color-variant row. Same save mechanism
+          (the `edits` state above is keyed by product id, not by category,
+          so it already works here with no changes.) ── */}
+      {customCategoryProducts.map(({ cat, list }) => (
+        <SectionDropdown
+          key={cat.id}
+          id={`cat-${cat.slug}`}
+          title={`${cat.category_type === "accessory" ? "✨" : "👕"} ${cat.name}`}
+          count={list.length}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full font-serif text-sm">
+              <thead>
+                <tr className="border-b border-border bg-secondary/30">
+                  <th className="text-left p-4 text-muted-foreground font-medium">Product</th>
+                  <th className="text-left p-4 text-muted-foreground font-medium">Total</th>
+                  <th className="text-left p-4 text-muted-foreground font-medium">
+                    {cat.category_type === "accessory" ? "By Style / Color" : "By Size"}
+                  </th>
+                  <th className="text-left p-4 text-muted-foreground font-medium">Status</th>
+                  <th className="text-left p-4 text-muted-foreground font-medium">Save</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.length === 0
+                  ? <tr><td colSpan={5} className="p-8 text-center font-serif text-sm text-muted-foreground">No products in {cat.name} match current filter.</td></tr>
+                  : list.map((p: any) => cat.category_type === "accessory" ? renderAccessoryRow(p) : renderTeeTankRow(p))}
+              </tbody>
+            </table>
+          </div>
+        </SectionDropdown>
+      ))}
 
     </div>
   );

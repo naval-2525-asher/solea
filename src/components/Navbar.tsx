@@ -4,7 +4,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, Search, ArrowRight, ChevronRight, ShoppingBag, ChevronDown } from "lucide-react";
 import { products as staticProducts } from "@/lib/products";
 import { useCart } from "@/context/CartContext";
-import { useSiteSettings, useProducts, useSaleProducts } from "@/hooks/useAdminData";
+import { useSiteSettings, useProducts, useSaleProducts, useCategories, useActiveCategoryNames } from "@/hooks/useAdminData";
+import { getShowNewBadge } from "@/pages/admin/AdminCategories";
 import { useRegion, REGIONS, Region } from "@/context/RegionContext";
 
 // ── Announcement Bar ──────────────────────────────────────────────────────────
@@ -66,14 +67,16 @@ const RegionSelector: React.FC = () => {
 };
 
 // ── Nav links ─────────────────────────────────────────────────────────────────
-const NAV_LINKS = [
-  { to: "/",                label: "Home",            sale: false },
-  { to: "/sale",            label: "SALE 🏷️",         sale: true  },
-  { to: "/shop",            label: "Tanks & Tees",    sale: false },
-  { to: "/accessories",     label: "Accessories",     sale: false },
-  { to: "/limited-edition", label: "Limited Edition", sale: false },
-  { to: "/faq",             label: "FAQ",             sale: false },
-  { to: "/contact",         label: "Contact Us",      sale: false },
+// Category links (Tees & Tanks, Accessories, Limited Edition, Bagcharms, and
+// any new categories) are injected dynamically at render time from the
+// categories table — see NAV_LINKS_BEFORE_CATEGORIES / _AFTER below.
+const NAV_LINKS_BEFORE_CATEGORIES = [
+  { to: "/",     label: "Home",     sale: false },
+  { to: "/sale", label: "SALE 🏷️",  sale: true  },
+];
+const NAV_LINKS_AFTER_CATEGORIES = [
+  { to: "/faq",     label: "FAQ",         sale: false },
+  { to: "/contact", label: "Contact Us",  sale: false },
 ];
 
 // ── Slide Panel (reusable) ────────────────────────────────────────────────────
@@ -142,11 +145,11 @@ const SlidePanel = ({
 // A product is "on sale" for search purposes when: the global sale toggle is
 // live, AND the product has an entry in the sale_products table with a price
 // for the shopper's current region.
-const isAccessoryCategory = (category: string) =>
-  category === "Accessories" || category === "Bagcharms";
+const isAccessoryCategory = (category: string, categoryTypeMap: Record<string, string>) =>
+  category === "Accessories" || category === "Bagcharms" || categoryTypeMap[category] === "accessory";
 
-const getSearchHref = (product: any) =>
-  isAccessoryCategory(product.category) ? `/accessories/${product.id}` : `/product/${product.id}`;
+const getSearchHref = (product: any, categoryTypeMap: Record<string, string>) =>
+  isAccessoryCategory(product.category, categoryTypeMap) ? `/accessories/${product.id}` : `/product/${product.id}`;
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 const Navbar: React.FC = () => {
@@ -164,8 +167,29 @@ const Navbar: React.FC = () => {
   const { data: dbProducts = [] } = useProducts();
   const { data: saleData = [] } = useSaleProducts();
   const { data: settings = [] } = useSiteSettings();
+  const { data: dbCategories = [] } = useCategories();
 
   const saleIsLive = (settings as any[]).find((s: any) => s.key === "sale_live")?.value === "true";
+
+  // Category entries in the burger menu — live + coming soon, ordered by
+  // menu_order (falls back to display_order). Draft/Archived never show.
+  const categoryLinks = (dbCategories as any[])
+    .filter((cat) => cat.status === "live" || cat.status === "coming_soon")
+    .sort((a, b) => (a.menu_order ?? a.display_order ?? 0) - (b.menu_order ?? b.display_order ?? 0))
+    .map((cat) => ({
+      to: cat.is_legacy ? cat.legacy_href : `/category/${cat.slug}`,
+      label: cat.name,
+      sale: false,
+      comingSoon: cat.status === "coming_soon",
+      isNew: getShowNewBadge(cat),
+    }));
+  const NAV_LINKS = [...NAV_LINKS_BEFORE_CATEGORIES, ...categoryLinks, ...NAV_LINKS_AFTER_CATEGORIES];
+
+  // Used to route search results for any accessory-type category (new or
+  // built-in) to the AccessoryDetail page instead of the generic one.
+  const categoryTypeMap: Record<string, string> = Object.fromEntries(
+    (dbCategories as any[]).map((c: any) => [c.name, c.category_type])
+  );
 
   const salePriceMap = useMemo(() => {
     const map: Record<string, { sale_price: number; sale_price_gbp: number | null }> = {};
@@ -175,7 +199,9 @@ const Navbar: React.FC = () => {
     return map;
   }, [saleData]);
 
-  const allProducts = dbProducts.length > 0 ? dbProducts : staticProducts;
+  const activeCategoryNames = useActiveCategoryNames();
+  const allProducts = (dbProducts.length > 0 ? dbProducts : staticProducts)
+    .filter((p: any) => activeCategoryNames.has(p.category));
 
   // Close both on route change
   useEffect(() => {
@@ -247,26 +273,48 @@ const Navbar: React.FC = () => {
 
         {/* Links */}
         <nav style={{ padding: "12px", flex: 1 }}>
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              onClick={closeMenu}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "13px 14px", borderRadius: "12px", textDecoration: "none",
-                fontFamily: "Georgia, serif", fontSize: "14px",
-                fontWeight: link.sale ? 900 : 400,
-                color: link.sale ? "#dc2626" : "hsl(var(--foreground))",
-                transition: "background 0.18s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = link.sale ? "rgba(220,38,38,0.08)" : "rgba(255,255,255,0.28)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              {link.label}
-              <ChevronRight size={15} style={{ opacity: 0.45 }} />
-            </Link>
-          ))}
+          {NAV_LINKS.map((link: any) => {
+            const content = (
+              <>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {link.label}
+                  {link.isNew && (
+                    <span style={{ background: "hsl(var(--destructive))", color: "#fff", fontFamily: "Georgia, serif", fontWeight: 900, fontSize: "9px", letterSpacing: "0.1em", padding: "2px 7px", borderRadius: "999px" }}>NEW</span>
+                  )}
+                  {link.comingSoon && (
+                    <span style={{ background: "hsl(var(--foreground) / 0.15)", color: "hsl(var(--foreground))", fontFamily: "Georgia, serif", fontWeight: 700, fontSize: "9px", letterSpacing: "0.08em", padding: "2px 7px", borderRadius: "999px" }}>COMING SOON</span>
+                  )}
+                </span>
+                {!link.comingSoon && <ChevronRight size={15} style={{ opacity: 0.45 }} />}
+              </>
+            );
+            const sharedStyle: React.CSSProperties = {
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "13px 14px", borderRadius: "12px", textDecoration: "none",
+              fontFamily: "Georgia, serif", fontSize: "14px",
+              fontWeight: link.sale ? 900 : 400,
+              color: link.sale ? "#dc2626" : "hsl(var(--foreground))",
+              opacity: link.comingSoon ? 0.6 : 1,
+              transition: "background 0.18s",
+            };
+            if (link.comingSoon) {
+              // Matches the home page: Coming Soon items are informational
+              // only, not clickable, until the category is launched.
+              return <div key={link.to} style={sharedStyle}>{content}</div>;
+            }
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                onClick={closeMenu}
+                style={sharedStyle}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = link.sale ? "rgba(220,38,38,0.08)" : "rgba(255,255,255,0.28)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                {content}
+              </Link>
+            );
+          })}
         </nav>
 
         <div style={{ padding: "14px 20px", borderTop: "1px solid hsl(var(--foreground) / 0.1)", fontFamily: "Georgia, serif", fontSize: "11px", letterSpacing: "0.1em", opacity: 0.5, color: "hsl(var(--foreground))" }}>
@@ -298,7 +346,7 @@ const Navbar: React.FC = () => {
               onKeyDown={(e) => {
                 if (e.key === "Escape") closeSearch();
                 if (e.key === "Enter" && filteredProducts.length === 1) {
-                  navigate(getSearchHref(filteredProducts[0]));
+                  navigate(getSearchHref(filteredProducts[0], categoryTypeMap), { state: { from: location.pathname } });
                   closeSearch();
                 }
               }}
@@ -322,7 +370,8 @@ const Navbar: React.FC = () => {
           {filteredProducts.map((product: any) => (
             <Link
               key={product.id}
-              to={getSearchHref(product)}
+              to={getSearchHref(product, categoryTypeMap)}
+              state={{ from: location.pathname }}
               onClick={closeSearch}
               style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", borderRadius: "12px", textDecoration: "none", color: "hsl(var(--foreground))", transition: "background 0.15s", marginBottom: "2px" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--secondary))")}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { products as staticProducts } from "@/lib/products";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useSaleProducts } from "@/hooks/useAdminData";
+import { useSaleProducts, useCategories } from "@/hooks/useAdminData";
 import { useRegion } from "@/context/RegionContext";
 import { getStyleSizeStock, LOW_STOCK_THRESHOLD, getSizeColorStock, hasSizeColorGrid } from "@/lib/inventory";
 
@@ -45,6 +45,7 @@ const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
 
 const ProductDetail = () => {
   const { id } = useParams();
+  const location = useLocation();
 
   const { data: dbProduct, isLoading } = useQuery({
     queryKey: ["product", id],
@@ -93,6 +94,7 @@ const ProductDetail = () => {
 
   // Sale data — must be before any early returns (React rules of hooks)
   const { data: saleData = [] } = useSaleProducts();
+  const { data: categoriesForBack = [] } = useCategories();
   const [quantity, setQuantity] = useState(1);
   const [quantityError, setQuantityError] = useState("");
   const { region, formatPrice } = useRegion();
@@ -128,25 +130,33 @@ const ProductDetail = () => {
   const staticSizes = (product as any).sizes || ["S", "M", "L", "XL"];
   const availableSizes = dbSizes.length > 0 ? dbSizes : staticSizes;
 
-  const isTeeProduct = dbProduct?.category === "Tees & Tank Tops" ||
-    (product as any).category === "beaded tee" || (product as any).category === "beaded tank";
-  const isLimited = dbProduct?.category === "Limited Edition";
-  const hasSizes = isTeeProduct || isLimited;
+  // Whether this product needs Style (Tee/Tank) + Size selection is driven by
+  // its category's category_type — so ANY category marked "Wearable" (not
+  // just the two built-in ones) gets the exact same required-size behavior.
+  // Falls back to the old name checks only if categories haven't loaded yet.
+  const productCategoryRow = (categoriesForBack as any[]).find((c) => c.name === dbProduct?.category);
+  const isWearableCategory = productCategoryRow
+    ? productCategoryRow.category_type === "wearable"
+    : (dbProduct?.category === "Tees & Tank Tops" || dbProduct?.category === "Limited Edition"
+        || (product as any).category === "beaded tee" || (product as any).category === "beaded tank");
+  const isTeeProduct = isWearableCategory && dbProduct?.category !== "Limited Edition";
+  const isLimited = isWearableCategory && dbProduct?.category === "Limited Edition";
+  const hasSizes = isWearableCategory;
 
   const availableAs: string[] = (dbProduct as any)?.available_as || [];
   const teeSizes  = availableSizes.filter((s: string) => s !== "XL" ? true : true); // all sizes including XL
   const tankSizes = availableSizes.filter((s: string) => s !== "XL");
 
-  // For limited edition and tees-tanks: show sizes matching the selected style
+  // For any Wearable category: show sizes matching the selected style.
   // If available_as has only "tank", always show tank sizes regardless of selectedType
   const effectiveType: "tee" | "tank" =
-    (isTeeProduct || isLimited)
+    isWearableCategory
       ? (availableAs.includes("tank") && !availableAs.includes("tee") ? "tank"
         : availableAs.includes("tee") && !availableAs.includes("tank") ? "tee"
         : selectedType)
       : selectedType;
 
-  const currentSizes = (isTeeProduct || isLimited)
+  const currentSizes = isWearableCategory
     ? (effectiveType === "tee" ? teeSizes : tankSizes)
     : availableSizes;
 
@@ -313,6 +323,15 @@ const ProductDetail = () => {
       }
     }
 
+    // 1d. Color validation — if the admin configured any colors for this
+    // style (tee/tank), a color must be picked before checkout, same as size.
+    if (activeColors.length > 0 && !selectedColor) {
+      setErrorGroups(["__color"]);
+      triggerShake(["__color"]);
+      toast.error("Please select a color");
+      return;
+    }
+
     // 2. Variant group validation — optional groups (all options marked
     // not required) don't block checkout if left unselected.
     const missingVariants = Object.keys(variantGroups).filter(
@@ -445,9 +464,17 @@ const ProductDetail = () => {
       <div className="px-10 pt-6">
         <Link
           to={
-            dbProduct?.category === "Limited Edition" ? "/limited-edition"
-            : dbProduct?.category === "Accessories"   ? "/accessories"
-            : "/shop"
+            location.state?.from ||
+            (() => {
+              const cat = (categoriesForBack as any[]).find((c) => c.name === dbProduct?.category);
+              if (cat) return cat.is_legacy ? cat.legacy_href : `/category/${cat.slug}`;
+              // Fallback for the split legacy routes that predate the
+              // categories table matching every product's category exactly.
+              return dbProduct?.category === "Limited Edition" ? "/limited-edition"
+                : dbProduct?.category === "Accessories"   ? "/accessories"
+                : dbProduct?.category === "Bagcharms"      ? "/bagcharms"
+                : "/shop";
+            })()
           }
           className="text-foreground font-serif text-sm no-underline flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
         >
@@ -623,11 +650,20 @@ const ProductDetail = () => {
             <div style={{ marginBottom: "1.75rem" }}>
               <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
                 Color
+                <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
                 {selectedColor && (
                   <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 8, fontSize: "0.78rem" }}>— {selectedColor}</span>
                 )}
               </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div
+                className={shakeGroups.includes("__color") ? "shake-field" : ""}
+                style={{
+                  display: "flex", flexWrap: "wrap", gap: "0.5rem",
+                  padding: "8px 10px", borderRadius: "0.85rem",
+                  border: errorGroups.includes("__color") ? "1.5px solid #8B1A2F" : "1.5px solid transparent",
+                  background: errorGroups.includes("__color") ? "rgba(139,26,47,0.04)" : "transparent",
+                }}
+              >
                 {activeColors.map((colorName) => {
                   const hex = PRESET_COLOR_HEX[colorName] || "#888";
                   const isSelected = selectedColor === colorName;
@@ -664,7 +700,11 @@ const ProductDetail = () => {
                       key={colorName}
                       title={colorOOS ? `${colorName} — sold out` : colorName}
                       disabled={colorOOS}
-                      onClick={() => !colorOOS && setSelectedColor(isSelected ? null : colorName)}
+                      onClick={() => {
+                        if (colorOOS) return;
+                        setSelectedColor(isSelected ? null : colorName);
+                        setErrorGroups((e) => e.filter((x) => x !== "__color"));
+                      }}
                       style={{
                         width: 34, height: 34, borderRadius: "50%",
                         background: hex,
