@@ -1,24 +1,27 @@
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useSaleProducts, useSiteSettings, useCategories, useActiveCategoryNames } from "@/hooks/useAdminData";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FilterSortBar, { ViewMode } from "@/components/FilterSortBar";
+import { useFilterSort } from "@/hooks/useFilterSort";
 import { useRegion } from "@/context/RegionContext";
 
 const isOutOfStock = (product: any) =>
   product.stock_status === "out_of_stock" || product.stock_status === "Out of Stock";
 
-const calcDiscount = (item: any, region: string) => {
-  if (region === "UK" && item.sale_price_gbp && item.products?.price_gbp) {
-    return Math.round(((item.products.price_gbp - item.sale_price_gbp) / item.products.price_gbp) * 100);
+const calcDiscount = (product: any, region: string) => {
+  if (region === "UK" && product.sale_price_gbp && product.price_gbp) {
+    return Math.round(((product.price_gbp - product.sale_price_gbp) / product.price_gbp) * 100);
   }
-  return Math.round(((item.products.price - item.sale_price) / item.products.price) * 100);
+  return Math.round(((product.price - product.sale_price) / product.price) * 100);
 };
 
-const SaleCard = ({ item }: { item: any }) => {
-  const product = item.products;
+const SaleCard = ({ product, viewMode = "triple" }: { product: any; viewMode?: ViewMode }) => {
   const oos = isOutOfStock(product);
+  const imgHeight = viewMode === "single" ? "600px" : viewMode === "double" ? "320px" : "280px";
   const { formatPrice, region } = useRegion();
-  const discount = calcDiscount(item, region);
+  const discount = calcDiscount(product, region);
   // Any accessory-type category (built-in or newly created in Admin →
   // Categories) goes to the proven AccessoryDetail page; wearable-type goes
   // to the generic ProductDetail page.
@@ -48,7 +51,7 @@ const SaleCard = ({ item }: { item: any }) => {
 
         {oos && (
           <div style={{
-            position: "absolute", top: 8, right: 8, zIndex: 10,
+            position: "absolute", top: 8, left: 8, zIndex: 10,
             background: "hsl(0 84.2% 60.2%)", color: "#fff",
             fontFamily: "Georgia, 'Times New Roman', serif",
             fontWeight: 900, fontSize: "0.62rem", letterSpacing: "0.15em",
@@ -58,7 +61,7 @@ const SaleCard = ({ item }: { item: any }) => {
           </div>
         )}
 
-        <div className="bg-solea-warm flex items-center justify-center overflow-hidden" style={{ height: "340px" }}>
+        <div className="bg-solea-warm flex items-center justify-center overflow-hidden" style={{ height: imgHeight, transition: "height 0.3s ease" }}>
           <img
             src={product.image || product.images?.[0] || ""}
             alt={product.name}
@@ -78,10 +81,10 @@ const SaleCard = ({ item }: { item: any }) => {
             </p>
             <p className="text-foreground font-serif text-sm font-bold">
               {region === "UK"
-                ? item.sale_price_gbp
-                  ? `£${Number(item.sale_price_gbp).toLocaleString("en-GB")}`
+                ? product.sale_price_gbp
+                  ? `£${Number(product.sale_price_gbp).toLocaleString("en-GB")}`
                   : `£${Number(product.price_gbp ?? 0).toLocaleString("en-GB")}`
-                : `Rs. ${Number(item.sale_price).toLocaleString()}`}
+                : `Rs. ${Number(product.sale_price).toLocaleString()}`}
             </p>
           </div>
         </div>
@@ -90,16 +93,44 @@ const SaleCard = ({ item }: { item: any }) => {
   );
 };
 
+const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
+  if (viewMode === "single") return { display: "grid", gridTemplateColumns: "1fr", gap: "16px" };
+  if (viewMode === "double") return { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" };
+  return { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" };
+};
+
 const Sale = () => {
   const { data: saleItemsRaw = [], isLoading } = useSaleProducts();
   const activeCategoryNames = useActiveCategoryNames();
-  const saleItems = (saleItemsRaw as any[]).filter((item) => activeCategoryNames.has(item.products?.category));
   const { data: settings = [] } = useSiteSettings();
   const isLive = (settings as any[]).find((s: any) => s.key === "sale_live")?.value === "true";
-  const activeSaleItems = saleItems.filter((s: any) => s.products);
 
-  // Sale is off — show a friendly message instead of products
-  const showEmpty = !isLoading && (!isLive || activeSaleItems.length === 0);
+  // Flatten each sale row + its joined product into one object so the shared
+  // filter/sort hook (and FilterSortBar) work the same way they do on every
+  // other category page — sale_price/sale_price_gbp ride along for display.
+  const saleProducts = (saleItemsRaw as any[])
+    .filter((item) => item.products && activeCategoryNames.has(item.products.category))
+    .map((item) => ({
+      ...item.products,
+      sale_price: item.sale_price,
+      sale_price_gbp: item.sale_price_gbp,
+    }));
+
+  const initialViewMode = (): ViewMode =>
+    typeof window !== "undefined" && window.innerWidth < 768 ? "double" : "triple";
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const userChangedView = useRef(false);
+  const handleViewModeChange = (mode: ViewMode) => { userChangedView.current = true; setViewMode(mode); };
+  useEffect(() => {
+    const update = () => { if (!userChangedView.current) setViewMode(window.innerWidth < 768 ? "double" : "triple"); };
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const { sortBy, filters, sorted, filtered, maxPrice, hasFiltersApplied, setSortBy, setFilters } =
+    useFilterSort(saleProducts, true);
+
+  const showEmpty = !isLoading && (!isLive || saleProducts.length === 0);
 
   return (
     <main className="min-h-screen">
@@ -134,11 +165,34 @@ const Sale = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {activeSaleItems.map((item: any) => (
-              <SaleCard key={item.id} item={item} />
-            ))}
-          </div>
+          <>
+            <FilterSortBar
+              products={saleProducts}
+              filteredCount={filtered.length}
+              sortBy={sortBy}
+              filters={filters}
+              maxPrice={maxPrice}
+              onSortChange={setSortBy}
+              onFiltersApply={setFilters}
+              hasFiltersApplied={hasFiltersApplied}
+              showSizeFilter
+              viewMode={viewMode}
+              onViewModeChange={handleViewModeChange}
+            />
+            {sorted.length > 0 ? (
+              <div style={getGridStyle(viewMode)}>
+                {sorted.map((product: any) => (
+                  <SaleCard key={product.id} product={product} viewMode={viewMode} />
+                ))}
+              </div>
+            ) : (
+              <div style={{ minHeight: "30vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.9rem", color: "hsl(var(--muted-foreground))" }}>
+                  No sale items match your filters.
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
