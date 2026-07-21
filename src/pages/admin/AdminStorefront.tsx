@@ -20,7 +20,7 @@ import {
   useNewArrivals, useUpsertNewArrival, useDeleteNewArrival,
   useSaleProducts, useUpsertSaleProduct, useDeleteSaleProduct,
   useSiteSettings, useUpdateSiteSetting,
-  useProducts, uploadFile,
+  useProducts, uploadFile, useActiveCategoryNames,
 } from "@/hooks/useAdminData";
 
 export default function AdminStorefront() {
@@ -29,7 +29,11 @@ export default function AdminStorefront() {
   const { data: newArrivals = [] } = useNewArrivals();
   const { data: saleProducts = [] } = useSaleProducts();
   const { data: settings = [] } = useSiteSettings();
-  const { data: products = [] } = useProducts();
+  const { data: allProducts = [] } = useProducts();
+  const activeCategoryNames = useActiveCategoryNames();
+  // Only show products whose category is currently live/coming-soon/draft —
+  // never one that's been archived or deleted, in any of the three pickers.
+  const products = (allProducts as any[]).filter((p) => activeCategoryNames.has(p.category));
 
   const upsertBanner = useUpsertHeroBanner();
   const deleteBanner = useDeleteHeroBanner();

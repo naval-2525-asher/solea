@@ -522,6 +522,12 @@ const Home = () => {
   const validBestSellers = bestSellers.filter((bs: any) => bs.products);
   const validSaleItems = saleItems.filter((s: any) => s.products);
 
+  // Lets Best Sellers / New Arrivals cards show the sale price too, when
+  // that specific product also happens to be on sale.
+  const salePriceMap: Record<string, { sale_price: number; sale_price_gbp: number | null }> = Object.fromEntries(
+    (saleItems as any[]).map((s: any) => [s.product_id, { sale_price: s.sale_price, sale_price_gbp: s.sale_price_gbp }])
+  );
+
   return (
     <>
       <style>{`
@@ -644,7 +650,14 @@ const Home = () => {
           {validBestSellers.length > 0 ? (
             <ProductCarousel
               items={validBestSellers}
-              renderCard={(bs, i) => <ProductCard key={bs.id} product={bs.products} />}
+              renderCard={(bs, i) => (
+                <ProductCard
+                  key={bs.id}
+                  product={bs.products}
+                  salePrice={salePriceMap[bs.products.id]?.sale_price}
+                  salePriceGbp={salePriceMap[bs.products.id]?.sale_price_gbp}
+                />
+              )}
             />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "24px", maxWidth: "1000px", margin: "0 auto", padding: "0 52px" }}>
@@ -663,30 +676,28 @@ const Home = () => {
         {/* New Arrivals */}
         <section className="bg-background py-16 px-8">
           <Reveal direction="up">
-            <div className="max-w-[1100px] mx-auto rounded-3xl overflow-hidden" style={{ background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 70px, hsl(var(--solea-beige)) 70px, hsl(var(--solea-beige)) 140px)" }}>
-              <div style={{ padding: "44px 40px 48px" }}>
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <span aria-hidden="true" style={{ display: "inline-block", color: "#8B1A2F", fontSize: "1em", animation: "sparkleGlisten 1.8s ease-in-out infinite" }}>✦</span>
-                  <h2 className="text-center text-foreground font-serif text-4xl font-black">New Arrivals</h2>
-                  <span aria-hidden="true" style={{ display: "inline-block", color: "#8B1A2F", fontSize: "1em", animation: "sparkleGlisten 1.8s ease-in-out infinite", animationDelay: "0.6s" }}>✦</span>
-                </div>
-                <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mb-10">fresh pieces, just dropped</p>
-                {staticNewArrivals.length > 0 ? (
-                  <Link to="/shop" className="no-underline block max-w-[500px] mx-auto">
-                    <div className="relative rounded-2xl overflow-hidden cursor-pointer group transition-transform duration-300 hover:scale-[1.02] hover:shadow-xl" style={{ height: "320px" }}>
-                      <img src={staticNewArrivals[0].image} alt="New arrival" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/35 group-hover:bg-black/25 transition-colors" />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                        <p className="font-serif text-sm tracking-[0.25em] uppercase mt-3 opacity-90">Shop Now →</p>
-                      </div>
-                    </div>
-                  </Link>
-                ) : (
-                  <div className="flex justify-center"><p className="text-center text-foreground font-serif text-base opacity-50 tracking-wide">fresh pieces dropping soon — stay tuned!</p></div>
-                )}
-              </div>
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span aria-hidden="true" style={{ display: "inline-block", color: "#8B1A2F", fontSize: "1em", animation: "sparkleGlisten 1.8s ease-in-out infinite" }}>✦</span>
+              <h2 className="text-center text-foreground font-serif text-4xl font-black">New Arrivals</h2>
+              <span aria-hidden="true" style={{ display: "inline-block", color: "#8B1A2F", fontSize: "1em", animation: "sparkleGlisten 1.8s ease-in-out infinite", animationDelay: "0.6s" }}>✦</span>
             </div>
+            <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mb-10">fresh pieces, just dropped</p>
           </Reveal>
+          {staticNewArrivals.length > 0 ? (
+            <ProductCarousel
+              items={staticNewArrivals}
+              renderCard={(product: any) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  salePrice={salePriceMap[product.id]?.sale_price}
+                  salePriceGbp={salePriceMap[product.id]?.sale_price_gbp}
+                />
+              )}
+            />
+          ) : (
+            <div className="flex justify-center"><p className="text-center text-foreground font-serif text-base opacity-50 tracking-wide">fresh pieces dropping soon — stay tuned!</p></div>
+          )}
         </section>
 
         {/* On Sale */}
