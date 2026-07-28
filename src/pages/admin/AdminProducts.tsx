@@ -899,11 +899,27 @@ export default function AdminProducts() {
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <Label className="font-serif text-[10px]">Price (PKR)</Label>
-                              <Input type="number" min={0} value={ci.price_pkr ?? 500} onChange={(e) => updateCustomInput(ci.id, { price_pkr: e.target.value ? Number(e.target.value) : 500 })} className="font-serif text-xs h-7 mt-1" />
+                              <input
+                                type="number" min={0} step={1}
+                                defaultValue={ci.price_pkr ?? 500}
+                                key={`pkr-${ci.id}`}
+                                onBlur={(e) => updateCustomInput(ci.id, { price_pkr: e.target.value === "" ? 500 : Math.round(Number(e.target.value)) })}
+                                onChange={(e) => { if (e.target.value !== "") updateCustomInput(ci.id, { price_pkr: Math.round(Number(e.target.value)) }); else updateCustomInput(ci.id, { price_pkr: undefined }); }}
+                                placeholder="500"
+                                className="font-serif text-xs h-7 mt-1 w-full border border-input rounded-md px-2 bg-background"
+                              />
                             </div>
                             <div>
                               <Label className="font-serif text-[10px]">Price (GBP)</Label>
-                              <Input type="number" min={0} step="0.01" value={ci.price_gbp ?? 10} onChange={(e) => updateCustomInput(ci.id, { price_gbp: e.target.value ? Number(e.target.value) : 10 })} className="font-serif text-xs h-7 mt-1" />
+                              <input
+                                type="number" min={0} step={1}
+                                defaultValue={ci.price_gbp ?? 10}
+                                key={`gbp-${ci.id}`}
+                                onBlur={(e) => updateCustomInput(ci.id, { price_gbp: e.target.value === "" ? 10 : Math.round(Number(e.target.value)) })}
+                                onChange={(e) => { if (e.target.value !== "") updateCustomInput(ci.id, { price_gbp: Math.round(Number(e.target.value)) }); else updateCustomInput(ci.id, { price_gbp: undefined }); }}
+                                placeholder="10"
+                                className="font-serif text-xs h-7 mt-1 w-full border border-input rounded-md px-2 bg-background"
+                              />
                             </div>
                           </div>
                         </div>
