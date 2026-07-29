@@ -252,8 +252,13 @@ const ProductDetail = () => {
   // Skip any variant group that is a colour/color picker — those are now
   // handled by the tee_colors / tank_colors circle picker above.
   const COLOR_LABELS = ["tee color", "tank color", "color", "colour"];
+  // Groups used by old depends_on_group system that have been replaced by new with_text_heading
+  const replacedGroups = new Set(
+    customInputs.filter((ci) => ci.with_text_heading && ci.depends_on_group).map((ci) => ci.depends_on_group!)
+  );
   variants.forEach((v) => {
     if (COLOR_LABELS.includes((v.label || "").toLowerCase())) return;
+    if (replacedGroups.has(v.label)) return; // skip old variant groups replaced by new system
     if (!variantGroups[v.label]) variantGroups[v.label] = [];
     variantGroups[v.label].push(v);
   });
@@ -694,8 +699,7 @@ const ProductDetail = () => {
           {hasSizes && activeColors.length > 0 && (
             <div style={{ marginBottom: "1.75rem" }}>
               <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
-                Color
-                <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
+                {effectiveType === "tee" ? "Tee Colors" : "Tank Colors"}
                 {selectedColor && (
                   <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 8, fontSize: "0.78rem" }}>— {selectedColor}</span>
                 )}
