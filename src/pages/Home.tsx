@@ -677,7 +677,7 @@ const Home = () => {
         <section className="bg-background py-16 px-8">
           <Reveal direction="up">
             <div className="max-w-[1100px] mx-auto rounded-3xl overflow-hidden" style={{ background: "repeating-linear-gradient(to right, hsl(var(--solea-pink)), hsl(var(--solea-pink)) 70px, hsl(var(--solea-beige)) 70px, hsl(var(--solea-beige)) 140px)" }}>
-              <div style={{ padding: "44px 0 48px" }}>
+              <div style={{ padding: "44px 20px 48px" }}>
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <span aria-hidden="true" style={{ display: "inline-block", color: "#8B1A2F", fontSize: "1em", animation: "sparkleGlisten 1.8s ease-in-out infinite" }}>✦</span>
                   <h2 className="text-center text-foreground font-serif text-4xl font-black">New Arrivals</h2>
@@ -686,16 +686,13 @@ const Home = () => {
                 <p className="text-center text-foreground font-serif text-sm opacity-70 tracking-[0.15em] mb-10">fresh pieces, just dropped</p>
                 {staticNewArrivals.length > 0 ? (() => {
                   const featured = staticNewArrivals[0];
-                  const isAccessoryType = (dbCategories as any[]).find((c) => c.name === featured.category)?.category_type === "accessory";
-                  const featuredHref = isAccessoryType || featured.category === "Accessories" || featured.category === "Bagcharms"
-                    ? `/accessories/${featured.id}` : `/product/${featured.id}`;
                   return (
-                    <Link to={featuredHref} state={{ from: "/" }} className="no-underline block max-w-[500px] mx-auto">
-                      <div className="relative rounded-2xl overflow-hidden cursor-pointer group transition-transform duration-300 hover:scale-[1.02] hover:shadow-xl" style={{ height: "320px" }}>
+                    <Link to="/shop" state={{ from: "/" }} className="no-underline block max-w-[500px] mx-auto">
+                      <div className="relative rounded-2xl overflow-hidden cursor-pointer group transition-transform duration-300 hover:scale-[1.02] hover:shadow-xl h-[190px] sm:h-[260px] md:h-[320px]">
                         <img src={featured.image || featured.images?.[0]} alt={featured.name || "New arrival"} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/35 group-hover:bg-black/25 transition-colors" />
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                          <p className="font-serif text-sm tracking-[0.25em] uppercase mt-3 opacity-90">Shop Now →</p>
+                          <p className="font-serif text-xs sm:text-sm tracking-[0.2em] sm:tracking-[0.25em] uppercase mt-3 opacity-90">Shop Now →</p>
                         </div>
                       </div>
                     </Link>
