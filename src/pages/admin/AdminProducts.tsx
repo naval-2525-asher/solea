@@ -33,10 +33,14 @@ type CustomInput = {
   required: boolean;
   placeholder?: string;
   options?: string[];
-  // If set, this field only shows on the product page (and is only
-  // required) once the shopper has picked the matching variant group.
   depends_on_group?: string;
   depends_on_option?: string;
+  // With-text option fields
+  with_text_heading?: string;  // heading shown on site e.g. "With Text"
+  with_text_color?: string;    // color on button e.g. "Black"
+  price_pkr?: number;          // PKR price shown as +Rs. 500
+  price_gbp?: number;          // GBP price shown as +£5.00
+  compulsory?: boolean;        // must select + fill text before add to cart
 };
 
 // ─── Fixed sizes — auto-applied on save, never shown in UI ───────────────────
@@ -367,18 +371,13 @@ export default function AdminProducts() {
 
   // ── Custom input helpers — work on any of the three field keys ──
   const addCustomInput = (field: CiField = "custom_inputs") => {
-    if (!ciLabel.trim()) return;
     const ci: CustomInput = {
-      id: uid(), label: ciLabel.trim(), type: ciType, required: ciRequired,
-      placeholder: ciPlaceholder.trim() || undefined,
-      options: ciType === "select" || ciType === "color"
-        ? ciOptions.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
-      depends_on_group: ciDependsGroup.trim() || undefined,
-      depends_on_option: ciDependsGroup.trim() ? (ciDependsOption.trim() || undefined) : undefined,
+      id: uid(), label: "", type: "text", required: false,
+      placeholder: undefined, options: undefined,
+      with_text_heading: undefined, with_text_color: undefined,
+      price_pkr: 500, price_gbp: 10, compulsory: false,
     };
     setEditProduct((prev: any) => ({ ...prev, [field]: [...(prev[field] || []), ci] }));
-    setCiLabel(""); setCiType("text"); setCiRequired(false); setCiPlaceholder(""); setCiOptions("");
-    setCiDependsGroup(""); setCiDependsOption("");
   };
   const removeCustomInput = (id: string, field: CiField = "custom_inputs") =>
     setEditProduct((prev: any) => ({ ...prev, [field]: (prev[field] || []).filter((c: CustomInput) => c.id !== id) }));
@@ -884,152 +883,94 @@ export default function AdminProducts() {
                     {(editProduct.custom_inputs || []).map((ci: CustomInput) => (
                       <div key={ci.id} className="border border-border rounded-lg p-3 space-y-2 relative">
                         <button type="button" onClick={() => removeCustomInput(ci.id)} className="absolute top-2 right-2 w-5 h-5 rounded-full bg-destructive/10 text-destructive flex items-center justify-center border-none cursor-pointer text-[10px] font-bold hover:bg-destructive/20">✕</button>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="font-serif text-[10px]">Label</Label>
-                            <Input value={ci.label} onChange={(e) => updateCustomInput(ci.id, { label: e.target.value })} className="font-serif text-xs h-7 mt-1" />
+
+                        {/* ── NEW: With-Text Option (TOP) ── */}
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="font-serif text-[10px]">Label 1</Label>
+                              <Input value={ci.with_text_heading || ""} onChange={(e) => updateCustomInput(ci.id, { with_text_heading: e.target.value })} placeholder="e.g. With Text" className="font-serif text-xs h-7 mt-1" />
+                            </div>
+                            <div>
+                              <Label className="font-serif text-[10px]">Textbox</Label>
+                              <Input value={ci.with_text_color || ""} onChange={(e) => updateCustomInput(ci.id, { with_text_color: e.target.value })} placeholder="e.g. black" className="font-serif text-xs h-7 mt-1" />
+                            </div>
                           </div>
-                          <div>
-                            <Label className="font-serif text-[10px]">Type</Label>
-                            <Select value={ci.type} onValueChange={(v) => updateCustomInput(ci.id, { type: v as CustomInput["type"] })}>
-                              <SelectTrigger className="font-serif text-xs h-7 mt-1"><SelectValue /></SelectTrigger>
-                              <SelectContent>{INPUT_TYPES.map((t) => <SelectItem key={t} value={t} className="font-serif capitalize">{t}</SelectItem>)}</SelectContent>
-                            </Select>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="font-serif text-[10px]">Price (PKR)</Label>
+                              <input
+                                type="number" min={0} step={1}
+                                defaultValue={ci.price_pkr ?? 500}
+                                key={`pkr-${ci.id}`}
+                                onBlur={(e) => updateCustomInput(ci.id, { price_pkr: e.target.value === "" ? 500 : Math.round(Number(e.target.value)) })}
+                                onChange={(e) => { if (e.target.value !== "") updateCustomInput(ci.id, { price_pkr: Math.round(Number(e.target.value)) }); else updateCustomInput(ci.id, { price_pkr: undefined }); }}
+                                placeholder="500"
+                                className="font-serif text-xs h-7 mt-1 w-full border border-input rounded-md px-2 bg-background"
+                              />
+                            </div>
+                            <div>
+                              <Label className="font-serif text-[10px]">Price (GBP)</Label>
+                              <input
+                                type="number" min={0} step={1}
+                                defaultValue={ci.price_gbp ?? 10}
+                                key={`gbp-${ci.id}`}
+                                onBlur={(e) => updateCustomInput(ci.id, { price_gbp: e.target.value === "" ? 10 : Math.round(Number(e.target.value)) })}
+                                onChange={(e) => { if (e.target.value !== "") updateCustomInput(ci.id, { price_gbp: Math.round(Number(e.target.value)) }); else updateCustomInput(ci.id, { price_gbp: undefined }); }}
+                                placeholder="10"
+                                className="font-serif text-xs h-7 mt-1 w-full border border-input rounded-md px-2 bg-background"
+                              />
+                            </div>
                           </div>
                         </div>
-                        {ci.type === "text" && (
-                          <div>
-                            <Label className="font-serif text-[10px]">Placeholder</Label>
-                            <Input value={ci.placeholder || ""} onChange={(e) => updateCustomInput(ci.id, { placeholder: e.target.value })} className="font-serif text-xs h-7 mt-1" />
+
+                        {/* ── EXISTING: Label + Type + Placeholder ── */}
+                        <div className="border-t border-border/40 pt-2 space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="font-serif text-[10px]">Label 2</Label>
+                              <Input value={ci.label} placeholder="embroidered text" onChange={(e) => updateCustomInput(ci.id, { label: e.target.value })} className="font-serif text-xs h-7 mt-1" />
+                            </div>
+                            <div>
+                              <Label className="font-serif text-[10px]">Type</Label>
+                              <Select value={ci.type} onValueChange={(v) => updateCustomInput(ci.id, { type: v as CustomInput["type"] })}>
+                                <SelectTrigger className="font-serif text-xs h-7 mt-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>{INPUT_TYPES.map((t) => <SelectItem key={t} value={t} className="font-serif capitalize">{t}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
                           </div>
-                        )}
-                        {(ci.type === "select" || ci.type === "color") && (
-                          <div>
-                            <Label className="font-serif text-[10px]">{ci.type === "color" ? "Hex codes (comma-separated)" : "Options (comma-separated)"}</Label>
-                            <Input value={(ci.options || []).join(", ")} onChange={(e) => updateCustomInput(ci.id, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} className="font-serif text-xs h-7 mt-1" />
-                            {ci.type === "color" && ci.options && ci.options.length > 0 && (
-                              <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                                {ci.options.map((col, i) => <div key={i} title={col} style={{ width: 20, height: 20, borderRadius: "50%", background: col, border: "1.5px solid hsl(var(--border))" }} />)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={ci.required} onChange={(e) => updateCustomInput(ci.id, { required: e.target.checked })} style={{ accentColor: "hsl(var(--primary))" }} />
-                          <span className="font-serif text-[11px] text-muted-foreground">Required field</span>
-                        </label>
-                        {(editProduct.variants || []).length > 0 && (() => {
-                          const groupLabels: string[] = Array.from(new Set((editProduct.variants || []).map((v: VariantOption) => v.label).filter(Boolean)));
-                          const optionsInGroup: string[] = (editProduct.variants || [])
-                            .filter((v: VariantOption) => v.label === ci.depends_on_group)
-                            .map((v: VariantOption) => v.name);
-                          return (
-                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/60 mt-1">
-                              <div>
-                                <Label className="font-serif text-[10px]">Only show when variant is selected</Label>
-                                <Select value={ci.depends_on_group || "__none"} onValueChange={(v) => updateCustomInput(ci.id, { depends_on_group: v === "__none" ? undefined : v, depends_on_option: undefined })}>
-                                  <SelectTrigger className="font-serif text-xs h-7 mt-1"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none" className="font-serif">Always show</SelectItem>
-                                    {groupLabels.map((g) => <SelectItem key={g} value={g} className="font-serif">{g}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {ci.depends_on_group && (
-                                <div>
-                                  <Label className="font-serif text-[10px]">Specific option (optional)</Label>
-                                  <Select value={ci.depends_on_option || "__any"} onValueChange={(v) => updateCustomInput(ci.id, { depends_on_option: v === "__any" ? undefined : v })}>
-                                    <SelectTrigger className="font-serif text-xs h-7 mt-1"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__any" className="font-serif">Any option in group</SelectItem>
-                                      {optionsInGroup.map((n) => <SelectItem key={n} value={n} className="font-serif">{n}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
+                          {ci.type === "text" && (
+                            <div>
+                              <Label className="font-serif text-[10px]">Textbox Placeholder</Label>
+                              <Input value={ci.placeholder || ""} onChange={(e) => updateCustomInput(ci.id, { placeholder: e.target.value })} placeholder="e.g. bridesquad" className="font-serif text-xs h-7 mt-1" />
+                            </div>
+                          )}
+                          {(ci.type === "select" || ci.type === "color") && (
+                            <div>
+                              <Label className="font-serif text-[10px]">{ci.type === "color" ? "Hex codes (comma-separated)" : "Options (comma-separated)"}</Label>
+                              <Input value={(ci.options || []).join(", ")} onChange={(e) => updateCustomInput(ci.id, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} className="font-serif text-xs h-7 mt-1" />
+                              {ci.type === "color" && ci.options && ci.options.length > 0 && (
+                                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                  {ci.options.map((col, i) => <div key={i} title={col} style={{ width: 20, height: 20, borderRadius: "50%", background: col, border: "1.5px solid hsl(var(--border))" }} />)}
                                 </div>
                               )}
                             </div>
-                          );
-                        })()}
+                          )}
+                        </div>
+
+                        {/* ── SINGLE checkbox: compulsory ── */}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={ci.compulsory || false} onChange={(e) => updateCustomInput(ci.id, { compulsory: e.target.checked })} style={{ accentColor: "hsl(var(--primary))" }} />
+                          <span className="font-serif text-[11px] text-muted-foreground">Make this compulsory for item</span>
+                        </label>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="border border-dashed border-border rounded-lg p-3 space-y-2 bg-secondary/10">
-                  <p className="font-serif text-[11px] text-muted-foreground">Add new field:</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="font-serif text-[10px]">Field label</Label>
-                      <Input value={ciLabel} onChange={(e) => setCiLabel(e.target.value)} placeholder="e.g. Colour, Design" className="font-serif text-xs h-8 mt-1" />
-                    </div>
-                    <div>
-                      <Label className="font-serif text-[10px]">Type</Label>
-                      <Select value={ciType} onValueChange={(v) => setCiType(v as CustomInput["type"])}>
-                        <SelectTrigger className="font-serif text-xs h-8 mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {INPUT_TYPES.map((t) => (
-                            <SelectItem key={t} value={t} className="font-serif capitalize">
-                              {t === "text" ? "📝 Text" : t === "date" ? "📅 Date" : t === "color" ? "🎨 Color Picker" : "📋 Dropdown"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  {ciType === "text" && (
-                    <div>
-                      <Label className="font-serif text-[10px]">Placeholder</Label>
-                      <Input value={ciPlaceholder} onChange={(e) => setCiPlaceholder(e.target.value)} placeholder="e.g. Enter your preferred colour" className="font-serif text-xs h-8 mt-1" />
-                    </div>
-                  )}
-                  {(ciType === "select" || ciType === "color") && (
-                    <div>
-                      <Label className="font-serif text-[10px]">{ciType === "color" ? "Hex codes (comma-separated)" : "Options (comma-separated)"}</Label>
-                      <Input value={ciOptions} onChange={(e) => setCiOptions(e.target.value)} placeholder={ciType === "color" ? "#FF6B9D, #C5A3C0" : "Option A, Option B"} className="font-serif text-xs h-8 mt-1" />
-                    </div>
-                  )}
-                  {(editProduct.variants || []).length > 0 && (() => {
-                    const groupLabels: string[] = Array.from(new Set((editProduct.variants || []).map((v: VariantOption) => v.label).filter(Boolean)));
-                    const optionsInGroup: string[] = (editProduct.variants || [])
-                      .filter((v: VariantOption) => v.label === ciDependsGroup)
-                      .map((v: VariantOption) => v.name);
-                    return (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="font-serif text-[10px]">Only show when variant is selected</Label>
-                          <Select value={ciDependsGroup || "__none"} onValueChange={(v) => { setCiDependsGroup(v === "__none" ? "" : v); setCiDependsOption(""); }}>
-                            <SelectTrigger className="font-serif text-xs h-8 mt-1"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none" className="font-serif">Always show</SelectItem>
-                              {groupLabels.map((g) => <SelectItem key={g} value={g} className="font-serif">{g}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {ciDependsGroup && (
-                          <div>
-                            <Label className="font-serif text-[10px]">Specific option (optional)</Label>
-                            <Select value={ciDependsOption || "__any"} onValueChange={(v) => setCiDependsOption(v === "__any" ? "" : v)}>
-                              <SelectTrigger className="font-serif text-xs h-8 mt-1"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__any" className="font-serif">Any option in group</SelectItem>
-                                {optionsInGroup.map((n) => <SelectItem key={n} value={n} className="font-serif">{n}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={ciRequired} onChange={(e) => setCiRequired(e.target.checked)} style={{ accentColor: "hsl(var(--primary))" }} />
-                      <span className="font-serif text-[11px] text-muted-foreground">Required</span>
-                    </label>
-                    <Button type="button" onClick={() => addCustomInput()} disabled={!ciLabel.trim()} size="sm" className="font-serif h-8 text-xs">
-                      <Plus className="h-3 w-3 mr-1" /> Add Field
-                    </Button>
-                  </div>
-                </div>
+                <Button type="button" onClick={() => addCustomInput()} size="sm" variant="outline" className="font-serif h-8 text-xs w-full">
+                  <Plus className="h-3 w-3 mr-1" /> Add Field
+                </Button>
               </div>
 
               {/* Tags */}

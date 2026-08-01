@@ -26,12 +26,13 @@ type CustomInput = {
   required: boolean;
   placeholder?: string;
   options?: string[];
-  // If set, this field only appears (and is only required) once the shopper
-  // has picked the matching variant group — e.g. "Embroidered Text" only
-  // shows once "with text" is selected. Leave depends_on_option unset to
-  // match ANY option chosen within that group.
   depends_on_group?: string;
   depends_on_option?: string;
+  with_text_heading?: string;
+  with_text_color?: string;
+  price_pkr?: number;
+  price_gbp?: number;
+  compulsory?: boolean;
 };
 
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
@@ -81,6 +82,7 @@ const ProductDetail = () => {
   }, [(dbProduct as any)?.id]);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, VariantOption>>({});
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [selectedWithText, setSelectedWithText] = useState<Record<string, boolean>>({});
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [sizeGuideZoomed, setSizeGuideZoomed] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
@@ -250,8 +252,13 @@ const ProductDetail = () => {
   // Skip any variant group that is a colour/color picker — those are now
   // handled by the tee_colors / tank_colors circle picker above.
   const COLOR_LABELS = ["tee color", "tank color", "color", "colour"];
+  // Groups used by old depends_on_group system that have been replaced by new with_text_heading
+  const replacedGroups = new Set(
+    customInputs.filter((ci) => ci.with_text_heading && ci.depends_on_group).map((ci) => ci.depends_on_group!)
+  );
   variants.forEach((v) => {
     if (COLOR_LABELS.includes((v.label || "").toLowerCase())) return;
+    if (replacedGroups.has(v.label)) return; // skip old variant groups replaced by new system
     if (!variantGroups[v.label]) variantGroups[v.label] = [];
     variantGroups[v.label].push(v);
   });
@@ -276,7 +283,14 @@ const ProductDetail = () => {
   // the PKR value only if no GBP-specific amount was ever set).
   const extraPricePk  = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff || 0), 0);
   const extraPriceGbp = Object.values(selectedVariants).reduce((sum, v) => sum + (v.price_diff_gbp ?? v.price_diff ?? 0), 0);
-  const displayPrice = (product.price || 0) + extraPricePk;
+
+  // Add with-text price when customer has clicked the color button
+  const withTextExtraPkr = customInputs.reduce((sum, ci) =>
+    selectedWithText[ci.id] ? sum + (ci.price_pkr ?? 0) : sum, 0);
+  const withTextExtraGbp = customInputs.reduce((sum, ci) =>
+    selectedWithText[ci.id] ? sum + (ci.price_gbp ?? 0) : sum, 0);
+
+  const displayPrice = (product.price || 0) + extraPricePk + withTextExtraPkr;
 
   const saleItem = (saleData as any[]).find((s: any) => s.product_id === product.id);
   const salePrice = saleItem ? Number(saleItem.sale_price) + extraPricePk : null;
@@ -352,12 +366,39 @@ const ProductDetail = () => {
       return ci.depends_on_option ? picked.name === ci.depends_on_option : true;
     };
     const missingInputs = customInputs
-      .filter((ci) => ci.required && isCustomInputActive(ci) && !customValues[ci.id]?.trim())
+      // Skip required check if using new with_text_heading system (compulsory handles it)
+      .filter((ci) => ci.required && !ci.with_text_heading && isCustomInputActive(ci) && !customValues[ci.id]?.trim())
       .map((ci) => ci.id);
     if (missingInputs.length > 0) {
       setCustomErrors(missingInputs);
       triggerShake([]);
       toast.error("Please fill all required fields");
+      return;
+    }
+
+    // Compulsory: must select color button AND fill text
+    const missingCompulsory = customInputs.filter((ci) =>
+      ci.compulsory && (!selectedWithText[ci.id] || !customValues[ci.id]?.trim())
+    );
+    if (missingCompulsory.length > 0) {
+      const ci = missingCompulsory[0];
+      if (!selectedWithText[ci.id]) {
+        toast.error(`Please select the "${ci.with_text_heading || ci.label}" option to continue`);
+      } else {
+        setCustomErrors([ci.id]);
+        toast.error(`Please fill in the ${ci.label} field`);
+      }
+      return;
+    }
+
+    // Even if not compulsory: if customer clicked the color button, they must fill the text
+    const selectedButEmpty = customInputs.filter((ci) =>
+      selectedWithText[ci.id] && !customValues[ci.id]?.trim()
+    );
+    if (selectedButEmpty.length > 0) {
+      const ci = selectedButEmpty[0];
+      setCustomErrors([ci.id]);
+      toast.error(`You selected the ${ci.with_text_heading || "text"} option — please fill in the text field`);
       return;
     }
 
@@ -387,7 +428,7 @@ const ProductDetail = () => {
     // Add custom input values (skip any field whose dependent variant isn't
     // currently selected — avoids leaking a stale value typed earlier)
     customInputs.forEach((ci) => {
-      if (ci.depends_on_group) {
+      if (ci.depends_on_group && !ci.with_text_heading) {
         const picked = selectedVariants[ci.depends_on_group];
         const active = picked && (!ci.depends_on_option || picked.name === ci.depends_on_option);
         if (!active) return;
@@ -395,10 +436,21 @@ const ProductDetail = () => {
       if (customValues[ci.id]) {
         customisation[ci.label] = customValues[ci.id];
       }
+      // Record the color button selection so it shows in cart/orders
+      if (selectedWithText[ci.id] && ci.with_text_heading) {
+        const colorLabel = ci.with_text_heading;
+        const colorVal = ci.with_text_color || "black";
+        const priceSuffix = region !== "UK" && ci.price_pkr
+          ? ` +Rs. ${ci.price_pkr.toLocaleString()}`
+          : region === "UK" && ci.price_gbp
+          ? ` +£${Number(ci.price_gbp).toFixed(2)}`
+          : "";
+        customisation[colorLabel] = `${colorVal}${priceSuffix}`;
+      }
     });
 
     const gbpBase = (dbProduct as any)?.price_gbp && Number((dbProduct as any).price_gbp) > 0
-      ? Number((dbProduct as any).price_gbp) + extraPriceGbp : null;
+      ? Number((dbProduct as any).price_gbp) + extraPriceGbp + withTextExtraGbp : null;
     const saleGbpBase = salePriceGbp && salePriceGbp > 0 ? salePriceGbp : null;
 
     const regionPrice = region === "UK"
@@ -410,9 +462,7 @@ const ProductDetail = () => {
       return;
     }
 
-    // Always store PKR as the canonical price; store GBP separately so
-    // Cart/Checkout can show the right currency without re-fetching.
-    const pkrPrice = salePrice ?? displayPrice;
+    const pkrPrice = (salePrice ?? ((product.price || 0) + extraPricePk)) + withTextExtraPkr;
     const gbpCartPrice = saleGbpBase ?? gbpBase ?? undefined;
 
     for (let i = 0; i < quantity; i++) {
@@ -649,8 +699,7 @@ const ProductDetail = () => {
           {hasSizes && activeColors.length > 0 && (
             <div style={{ marginBottom: "1.75rem" }}>
               <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
-                Color
-                <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>
+                {effectiveType === "tee" ? "Tee Colors" : "Tank Colors"}
                 {selectedColor && (
                   <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 8, fontSize: "0.78rem" }}>— {selectedColor}</span>
                 )}
@@ -817,59 +866,98 @@ const ProductDetail = () => {
           {customInputs.length > 0 && (
             <div style={{ marginBottom: "1.75rem" }}>
               {customInputs.map((ci) => {
-                // Fields tied to a variant group (e.g. "Embroidered Text"
-                // only once "with text" is picked) stay hidden until that
-                // variant is actually selected.
-                if (ci.depends_on_group) {
+                // If using new system (with_text_heading), skip old variant-based visibility
+                if (ci.depends_on_group && !ci.with_text_heading) {
                   const picked = selectedVariants[ci.depends_on_group];
                   const active = picked && (!ci.depends_on_option || picked.name === ci.depends_on_option);
                   if (!active) return null;
                 }
                 const hasErr = customErrors.includes(ci.id);
+                const withTextActive = selectedWithText[ci.id];
+                const hasWithText = !!ci.with_text_heading;
+
                 return (
                   <div key={ci.id} style={{ marginBottom: "1.1rem" }}>
-                    <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
-                      {ci.label}{ci.required && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
-                    </p>
 
-                    {ci.type === "text" && (
-                      <input type="text" value={customValues[ci.id] || ""}
-                        onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
-                        placeholder={ci.placeholder || ""}
-                        style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))" }} />
-                    )}
-                    {ci.type === "date" && (
-                      <input type="date" value={customValues[ci.id] || ""}
-                        onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
-                        style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))" }} />
-                    )}
-                    {ci.type === "select" && ci.options && (
-                      <select value={customValues[ci.id] || ""}
-                        onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
-                        style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))", appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center", paddingRight: "2rem" }}>
-                        <option value="">Select…</option>
-                        {ci.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-                    )}
-                    {ci.type === "color" && ci.options && ci.options.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.25rem", padding: "8px 10px", borderRadius: "0.85rem", border: hasErr ? "1.5px solid #8B1A2F" : "1.5px solid transparent" }}>
-                        {ci.options.map((col) => {
-                          const isSelected = customValues[ci.id] === col;
-                          return (
-                            <button type="button" key={col} title={col}
-                              onClick={() => { setCustomValues((prev) => ({ ...prev, [ci.id]: col })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
-                              style={{ width: 34, height: 34, borderRadius: "50%", background: col, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
-                          );
-                        })}
-                        {customValues[ci.id] && (
-                          <span style={{ fontFamily: "inherit", fontSize: "0.78rem", color: "hsl(var(--muted-foreground))", alignSelf: "center", marginLeft: 4 }}>{customValues[ci.id]}</span>
-                        )}
+                    {/* With-text heading + color button */}
+                    {hasWithText && (
+                      <div style={{ marginBottom: "0.5rem" }}>
+                        <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.4rem" }}>
+                          {ci.with_text_heading}{ci.compulsory && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
+                          {withTextActive && (
+                            <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 8, fontSize: "0.78rem" }}>
+                              — {(ci.with_text_color || "Black").toLowerCase()}
+                            </span>
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWithText((prev) => ({ ...prev, [ci.id]: !prev[ci.id] }))}
+                          style={{
+                            fontFamily: "Georgia, 'Times New Roman', serif",
+                            fontSize: "0.82rem", fontWeight: 700,
+                            padding: "6px 16px", borderRadius: "999px",
+                            border: "2px solid",
+                            borderColor: withTextActive ? "hsl(var(--primary))" : "hsl(var(--border))",
+                            background: withTextActive ? "hsl(var(--primary))" : "transparent",
+                            color: withTextActive ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+                            cursor: "pointer", transition: "all 0.15s",
+                          }}
+                        >
+                          {(ci.with_text_color || "Black").toLowerCase()}
+                          {ci.price_pkr && region !== "UK" ? ` +Rs. ${ci.price_pkr.toLocaleString()}` : ""}
+                          {ci.price_gbp && region === "UK" ? ` +£${Number(ci.price_gbp).toFixed(2)}` : ""}
+                        </button>
                       </div>
                     )}
-                    {hasErr && (
-                      <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.73rem", color: "#8B1A2F", marginTop: "0.3rem" }}>
-                        This field is required
-                      </p>
+
+                    {/* Text input: always show when no with-text heading, or show after button clicked */}
+                    {(!hasWithText || withTextActive) && (
+                      <>
+                        <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
+                          {ci.label}{(ci.required || (ci.compulsory && withTextActive)) && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
+                        </p>
+
+                        {ci.type === "text" && (
+                          <input type="text" value={customValues[ci.id] || ""}
+                            onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                            placeholder={ci.placeholder || ""}
+                            style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))" }} />
+                        )}
+                        {ci.type === "date" && (
+                          <input type="date" value={customValues[ci.id] || ""}
+                            onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                            style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))" }} />
+                        )}
+                        {ci.type === "select" && ci.options && (
+                          <select value={customValues[ci.id] || ""}
+                            onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                            style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))", appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center", paddingRight: "2rem" }}>
+                            <option value="">Select…</option>
+                            {ci.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        )}
+                        {ci.type === "color" && ci.options && ci.options.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.25rem", padding: "8px 10px", borderRadius: "0.85rem", border: hasErr ? "1.5px solid #8B1A2F" : "1.5px solid transparent" }}>
+                            {ci.options.map((col) => {
+                              const isSelected = customValues[ci.id] === col;
+                              return (
+                                <button type="button" key={col} title={col}
+                                  onClick={() => { setCustomValues((prev) => ({ ...prev, [ci.id]: col })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                                  style={{ width: 34, height: 34, borderRadius: "50%", background: col, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
+                              );
+                            })}
+                            {customValues[ci.id] && (
+                              <span style={{ fontFamily: "inherit", fontSize: "0.78rem", color: "hsl(var(--muted-foreground))", alignSelf: "center", marginLeft: 4 }}>{customValues[ci.id]}</span>
+                            )}
+                          </div>
+                        )}
+                        {hasErr && (
+                          <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.73rem", color: "#8B1A2F", marginTop: "0.3rem" }}>
+                            This field is required
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 );
