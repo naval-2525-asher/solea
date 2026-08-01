@@ -46,7 +46,7 @@ Soléa`,
 
 Great news! 🌸 Your Soléa order #${ref} has been verified and confirmed.
 
-We will now begin preparing your order. Since each piece is meticulously hand-beaded to order, please allow up to two weeks for production before shipping.
+We will now begin preparing your order. Since each piece is meticulously hand-beaded to order, please allow up to four weeks for production before shipping.
 
 You will receive all updates and confirmations via email.
 
