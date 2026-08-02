@@ -103,9 +103,11 @@ const Shop = () => {
   const newArrivalProducts = (newArrivalsData as any[]).filter((a) => a.products).map((a) => a.products);
   const newArrivalIds = new Set(newArrivalProducts.map((p: any) => p.id));
 
-  const allProducts = dbProducts.length > 0
-    ? dbProducts.filter((p: any) => p.category === "Tees & Tank Tops")
-    : staticProducts.filter((p) => p.category === "beaded tee" || p.category === "beaded tank");
+  const allProducts = isLoading
+    ? []
+    : dbProducts.length > 0
+      ? dbProducts.filter((p: any) => p.category === "Tees & Tank Tops")
+      : staticProducts.filter((p) => p.category === "beaded tee" || p.category === "beaded tank");
 
   const regularProducts = allProducts.filter((p: any) => !newArrivalIds.has(p.id));
 
