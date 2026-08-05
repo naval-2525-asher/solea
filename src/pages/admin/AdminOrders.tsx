@@ -332,7 +332,15 @@ export default function AdminOrders() {
                                         {typeLabel ? ` · ${typeLabel}` : ""}
                                         {colorVal ? ` · Color: ${colorVal}` : ""}
                                         {item.size ? ` · ${item.size}` : ""}
-                                        {customEntries.map(([key, val]) => ` · ${key}: ${val}`).join("")}
+                                        {customEntries.map(([key, val]: [string, any]) => {
+                                          const isColorValue = /^#([0-9a-f]{3}){1,2}$/i.test(val)
+                                            || (typeof CSS !== "undefined" && CSS.supports?.("color", val));
+                                          return (
+                                            <span key={key}>
+                                              {" · "}{key}: {isColorValue ? val : <strong>&ldquo;{val}&rdquo;</strong>}
+                                            </span>
+                                          );
+                                        })}
                                         {" × "}{item.quantity} —{" "}
                                         {order.region === "UK"
                                           ? `£${(item.price * item.quantity).toLocaleString("en-GB")}`

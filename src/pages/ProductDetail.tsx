@@ -246,7 +246,10 @@ const ProductDetail = () => {
     : ((dbProduct as any)?.size_guide_tank || "/images/size-guide-tanks.jpg");
 
   const variants: VariantOption[] = ((dbProduct as any)?.variants || (product as any).variants || []).filter((v: any) => v && v.name);
-  const customInputs: CustomInput[] = ((dbProduct as any)?.custom_inputs || (product as any).custom_inputs || []).filter((ci: any) => ci && ci.id);
+  const customInputs: CustomInput[] = ((dbProduct as any)?.custom_inputs || (product as any).custom_inputs || [])
+    // Drop empty/unconfigured entries (e.g. a field added in admin but never
+    // filled in) — otherwise they render as a blank input box on the page.
+    .filter((ci: any) => ci && ci.id && ((ci.label && ci.label.trim()) || (ci.with_text_heading && ci.with_text_heading.trim())));
 
   const variantGroups: Record<string, VariantOption[]> = {};
   // Skip any variant group that is a colour/color picker — those are now
@@ -376,17 +379,26 @@ const ProductDetail = () => {
       return;
     }
 
-    // Compulsory: must select color button AND fill text
-    const missingCompulsory = customInputs.filter((ci) =>
-      ci.compulsory && (!selectedWithText[ci.id] || !customValues[ci.id]?.trim())
-    );
+    // Compulsory fields split into two systems:
+    // 1. "With-text" fields (ci.with_text_heading set) — customer must click
+    //    the color button AND fill in the text box.
+    // 2. Plain fields (text/date/select/color, no with_text_heading) — the
+    //    field itself just needs a value (e.g. a color swatch picked).
+    const missingCompulsory = customInputs.filter((ci) => {
+      if (!ci.compulsory) return false;
+      if (ci.with_text_heading) {
+        return !selectedWithText[ci.id] || !customValues[ci.id]?.trim();
+      }
+      return !customValues[ci.id]?.trim();
+    });
     if (missingCompulsory.length > 0) {
       const ci = missingCompulsory[0];
-      if (!selectedWithText[ci.id]) {
-        toast.error(`Please select the "${ci.with_text_heading || ci.label}" option to continue`);
+      if (ci.with_text_heading && !selectedWithText[ci.id]) {
+        toast.error(`Please select the "${ci.with_text_heading}" option to continue`);
       } else {
         setCustomErrors([ci.id]);
-        toast.error(`Please fill in the ${ci.label} field`);
+        const verb = ci.type === "color" || ci.type === "select" ? "select" : "fill in";
+        toast.error(`Please ${verb} the ${ci.label} ${ci.type === "color" || ci.type === "select" ? "option" : "field"} to continue`);
       }
       return;
     }

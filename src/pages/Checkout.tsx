@@ -422,6 +422,12 @@ const Checkout = () => {
               const exceedsStock = !isOOS && available !== Infinity && item.quantity > available;
               const colour = item.customisation?.Color || item.customisation?.Colour;
               const typeLabel = item.style === "accessory" ? null : item.style === "tee" ? "Tee" : "Tank";
+              // Any other custom fields (e.g. "Turtle Color", embroidery text)
+              // besides the plain Color/Colour key already shown above.
+              const COLOR_KEYS = ["color", "colour"];
+              const extraCustomisation = Object.entries(item.customisation || {}).filter(
+                ([key, val]) => val && !COLOR_KEYS.includes(key.toLowerCase())
+              );
 
               return (
                 <div
@@ -435,6 +441,20 @@ const Checkout = () => {
                       {colour ? ` · ${colour}` : ""}
                       {" · "}{item.size} × {item.quantity}
                     </span>
+                    {extraCustomisation.length > 0 && (
+                      <span className="text-foreground/60 text-xs">
+                        {extraCustomisation.map(([key, val], i) => {
+                          const isColorValue = /^#([0-9a-f]{3}){1,2}$/i.test(val)
+                            || (typeof CSS !== "undefined" && CSS.supports?.("color", val));
+                          return (
+                            <span key={key}>
+                              {i > 0 && " · "}
+                              {key}: {isColorValue ? val : <strong>&ldquo;{val}&rdquo;</strong>}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    )}
                     {isOOS && (
                       <span className="text-destructive text-xs font-bold">
                         {item.size && item.size !== "One Size" ? `Size ${item.size} is out of stock` : "This item is out of stock"}

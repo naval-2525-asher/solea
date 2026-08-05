@@ -154,7 +154,10 @@ const Cart = () => {
                         const displayLabel = isColorLabel ? "Color" : label;
                         // Skip if it's the same color already shown in the style line
                         if (isColorLabel && value === colour) return null;
-                        const isColorHex = /^#([0-9a-f]{3}){1,2}$/i.test(value);
+                        // Recognize hex codes AND CSS named colors (e.g. "darkgreen")
+                        // so custom color-type fields also get a swatch dot.
+                        const isColorHex = /^#([0-9a-f]{3}){1,2}$/i.test(value)
+                          || (typeof CSS !== "undefined" && CSS.supports?.("color", value));
                         return (
                           <span
                             key={label}
@@ -175,7 +178,8 @@ const Cart = () => {
                                 flexShrink: 0,
                               }} />
                             )}
-                            <span style={{ opacity: 0.65 }}>{displayLabel}:</span> {value}
+                            <span style={{ opacity: 0.65 }}>{displayLabel}:</span>{" "}
+                            {isColorHex ? value : <strong>&ldquo;{value}&rdquo;</strong>}
                           </span>
                         );
                       })}
