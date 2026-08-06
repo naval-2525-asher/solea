@@ -11,6 +11,22 @@ import { useRegion } from "@/context/RegionContext";
 import { getAccessoryVariantStock, getProductTotalStock, LOW_STOCK_THRESHOLD } from "@/lib/inventory";
 import { useSaleProducts, useCategories } from "@/hooks/useAdminData";
 
+type CustomInput = {
+  id: string;
+  label: string;
+  type: "text" | "date" | "color" | "select";
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+  depends_on_group?: string;
+  depends_on_option?: string;
+  with_text_heading?: string;
+  with_text_color?: string;
+  price_pkr?: number;
+  price_gbp?: number;
+  compulsory?: boolean;
+};
+
 const Lightbox = ({ src, onClose }: { src: string; onClose: () => void }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
     <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", maxWidth: "92vw", maxHeight: "92vh" }}>
@@ -66,6 +82,10 @@ const AccessoryDetail = () => {
   // validation
   const [shakeVariant, setShakeVariant] = useState(false);
   const [variantError, setVariantError] = useState(false);
+  // custom input fields (incl. "with text" toggle-button system)
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [customErrors, setCustomErrors] = useState<string[]>([]);
+  const [selectedWithText, setSelectedWithText] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setQty(1);
@@ -134,6 +154,71 @@ const AccessoryDetail = () => {
   const requiredGroupKeys = groupKeys.filter(isGroupRequired);
   const isMultiSelect = product.variants.length > 4;
 
+  const customInputs: CustomInput[] = ((dbProduct as any)?.custom_inputs || [])
+    .filter((ci: any) => ci && ci.id && ((ci.label && ci.label.trim()) || (ci.with_text_heading && ci.with_text_heading.trim())));
+
+  // Add with-text price when customer has clicked the color button
+  const withTextExtraPkr = customInputs.reduce((sum, ci) =>
+    selectedWithText[ci.id] ? sum + (ci.price_pkr ?? 0) : sum, 0);
+  const withTextExtraGbp = customInputs.reduce((sum, ci) =>
+    selectedWithText[ci.id] ? sum + (ci.price_gbp ?? 0) : sum, 0);
+
+  // Custom-input values (incl. the with-text color choice) merged into the
+  // cart's customisation record, same shape as the wearable product page.
+  const buildCustomInputCustomisation = (): Record<string, string> => {
+    const customisation: Record<string, string> = {};
+    customInputs.forEach((ci) => {
+      if (customValues[ci.id]) {
+        customisation[ci.label] = customValues[ci.id];
+      }
+      if (selectedWithText[ci.id] && ci.with_text_heading) {
+        const colorLabel = ci.with_text_heading;
+        const colorVal = ci.with_text_color || "black";
+        const priceSuffix = region !== "UK" && ci.price_pkr
+          ? ` +Rs. ${ci.price_pkr.toLocaleString()}`
+          : region === "UK" && ci.price_gbp
+          ? ` +£${Number(ci.price_gbp).toFixed(2)}`
+          : "";
+        customisation[colorLabel] = `${colorVal}${priceSuffix}`;
+      }
+    });
+    return customisation;
+  };
+
+  // Required/compulsory custom-input validation — shared by all 3 add-to-
+  // cart paths (multi-select, single-variant, no-variant). Returns an error
+  // message to show, or null if everything required has been filled in.
+  const validateCustomInputs = (): string | null => {
+    const missingInputs = customInputs.filter(
+      (ci) => ci.required && !ci.with_text_heading && !customValues[ci.id]?.trim()
+    );
+    if (missingInputs.length > 0) {
+      setCustomErrors(missingInputs.map((ci) => ci.id));
+      return "Please fill all required fields";
+    }
+    const missingCompulsory = customInputs.filter((ci) => {
+      if (!ci.compulsory) return false;
+      if (ci.with_text_heading) return !selectedWithText[ci.id] || !customValues[ci.id]?.trim();
+      return !customValues[ci.id]?.trim();
+    });
+    if (missingCompulsory.length > 0) {
+      const ci = missingCompulsory[0];
+      if (ci.with_text_heading && !selectedWithText[ci.id]) {
+        return `Please select the "${ci.with_text_heading}" option to continue`;
+      }
+      setCustomErrors([ci.id]);
+      const verb = ci.type === "color" || ci.type === "select" ? "select" : "fill in";
+      return `Please ${verb} the ${ci.label} ${ci.type === "color" || ci.type === "select" ? "option" : "field"} to continue`;
+    }
+    const selectedButEmpty = customInputs.filter((ci) => selectedWithText[ci.id] && !customValues[ci.id]?.trim());
+    if (selectedButEmpty.length > 0) {
+      const ci = selectedButEmpty[0];
+      setCustomErrors([ci.id]);
+      return `You selected the ${ci.with_text_heading || "text"} option — please fill in the text field`;
+    }
+    return null;
+  };
+
   const toggleMulti = (v: string) => {
     setSelectedMulti((prev) => prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]);
     setVariantError(false);
@@ -150,11 +235,11 @@ const AccessoryDetail = () => {
   };
 
   const selectedVariantObj = product.variants.find((v: any) => v.name === selectedVariant);
-  const singleTotal = (basePrice + (selectedVariantObj?.price_diff || 0)) * qty;
+  const singleTotal = (basePrice + (selectedVariantObj?.price_diff || 0) + withTextExtraPkr) * qty;
   const multiTotal = isMultiSelect
     ? selectedMulti.reduce((sum: number, name: string) => {
         const v = product.variants.find((vv: any) => vv.name === name);
-        return sum + basePrice + (v?.price_diff || 0);
+        return sum + basePrice + (v?.price_diff || 0) + withTextExtraPkr;
       }, 0) * qty
     : 0;
 
@@ -197,6 +282,15 @@ const AccessoryDetail = () => {
   };
 
   const handleAdd = () => {
+    // Custom input fields (incl. "with text" toggle) — validated before
+    // variants, same order as the wearable product page.
+    const customInputError = validateCustomInputs();
+    if (customInputError) {
+      toast.error(customInputError);
+      return;
+    }
+    setCustomErrors([]);
+
     // Validate every required variant group actually has a selection.
     // (This component uses a single shared selection value/list across all
     // groups, so this only reliably distinguishes required vs optional when
@@ -245,11 +339,11 @@ const AccessoryDetail = () => {
             productId: productIdForCart,
             name: product.name,
             image: allImages[0] || product.image,
-            price: activeSalePrice !== null ? activeSalePrice + variantPriceDiff : basePrice + variantPriceDiff,
-            priceGbp: gbpPrice ? (effectiveBase + variantPriceDiff) : undefined,
+            price: (activeSalePrice !== null ? activeSalePrice + variantPriceDiff : basePrice + variantPriceDiff) + withTextExtraPkr,
+            priceGbp: gbpPrice ? (effectiveBase + variantPriceDiff + withTextExtraGbp) : undefined,
             size: variantName,
             style: "accessory",
-            customisation: { Style: variantName },
+            customisation: { Style: variantName, ...buildCustomInputCustomisation() },
           });
         }
       });
@@ -284,11 +378,11 @@ const AccessoryDetail = () => {
           productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
-          price: activeSalePrice !== null ? activeSalePrice + variantPriceDiff : basePrice + variantPriceDiff,
-          priceGbp: gbpPrice ? (effectiveBaseForVariant + variantPriceDiff) : undefined,
+          price: (activeSalePrice !== null ? activeSalePrice + variantPriceDiff : basePrice + variantPriceDiff) + withTextExtraPkr,
+          priceGbp: gbpPrice ? (effectiveBaseForVariant + variantPriceDiff + withTextExtraGbp) : undefined,
           size: selectedVariant,
           style: "accessory",
-          customisation: { Style: selectedVariant },
+          customisation: { Style: selectedVariant, ...buildCustomInputCustomisation() },
         });
       }
       toast(`${product.name} (${selectedVariant}) added to cart!`);
@@ -310,15 +404,17 @@ const AccessoryDetail = () => {
         return;
       }
       const effectiveBaseNoVariant = effectiveBaseNoVariantRaw;
+      const noVariantCustomisation = buildCustomInputCustomisation();
       for (let i = 0; i < qty; i++) {
         addToCart({
           productId: productIdForCart,
           name: product.name,
           image: allImages[0] || product.image,
-          price: activeSalePrice !== null ? activeSalePrice : basePrice,
-          priceGbp: gbpPrice ? effectiveBaseNoVariant : undefined,
+          price: (activeSalePrice !== null ? activeSalePrice : basePrice) + withTextExtraPkr,
+          priceGbp: gbpPrice ? (effectiveBaseNoVariant + withTextExtraGbp) : undefined,
           size: "One Size",
           style: "accessory",
+          ...(Object.keys(noVariantCustomisation).length > 0 ? { customisation: noVariantCustomisation } : {}),
         });
       }
       toast(`${product.name} added to cart!`);
@@ -523,6 +619,116 @@ const AccessoryDetail = () => {
               )}
             </div>
           ))}
+
+          {/* Custom input fields (incl. "with text" toggle-button system) */}
+          {customInputs.length > 0 && (() => {
+            const inputStyle: React.CSSProperties = {
+              width: "100%",
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              color: "hsl(var(--foreground))",
+              background: "hsl(var(--background))",
+              border: "1.5px solid hsl(var(--border))",
+              borderRadius: "0.75rem",
+              padding: "0.55rem 0.85rem",
+              outline: "none",
+              boxSizing: "border-box",
+            };
+            return (
+              <div style={{ marginBottom: "1.75rem" }}>
+                {customInputs.map((ci) => {
+                  const hasErr = customErrors.includes(ci.id);
+                  const withTextActive = selectedWithText[ci.id];
+                  const hasWithText = !!ci.with_text_heading;
+                  return (
+                    <div key={ci.id} style={{ marginBottom: "1.1rem" }}>
+                      {/* With-text heading + color button */}
+                      {hasWithText && (
+                        <div style={{ marginBottom: "0.5rem" }}>
+                          <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.4rem" }}>
+                            {ci.with_text_heading}{ci.compulsory && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
+                            {withTextActive && (
+                              <span style={{ fontWeight: 400, color: "hsl(var(--muted-foreground))", marginLeft: 8, fontSize: "0.78rem" }}>
+                                — {(ci.with_text_color || "Black").toLowerCase()}
+                              </span>
+                            )}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedWithText((prev) => ({ ...prev, [ci.id]: !prev[ci.id] }))}
+                            style={{
+                              fontFamily: "Georgia, 'Times New Roman', serif",
+                              fontSize: "0.82rem", fontWeight: 700,
+                              padding: "6px 16px", borderRadius: "999px",
+                              border: "2px solid",
+                              borderColor: withTextActive ? "hsl(var(--primary))" : "hsl(var(--border))",
+                              background: withTextActive ? "hsl(var(--primary))" : "transparent",
+                              color: withTextActive ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+                              cursor: "pointer", transition: "all 0.15s",
+                            }}
+                          >
+                            {(ci.with_text_color || "Black").toLowerCase()}
+                            {ci.price_pkr && region !== "UK" ? ` +Rs. ${ci.price_pkr.toLocaleString()}` : ""}
+                            {ci.price_gbp && region === "UK" ? ` +£${Number(ci.price_gbp).toFixed(2)}` : ""}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Text input: always show when no with-text heading, or show after button clicked */}
+                      {(!hasWithText || withTextActive) && (
+                        <>
+                          <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.08em", color: "hsl(var(--foreground))", marginBottom: "0.5rem" }}>
+                            {ci.label}{(ci.required || (ci.compulsory && withTextActive)) && <span style={{ color: "#8B1A2F", marginLeft: 2 }}>*</span>}
+                          </p>
+
+                          {ci.type === "text" && (
+                            <input type="text" value={customValues[ci.id] || ""}
+                              onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                              placeholder={ci.placeholder || ""}
+                              style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))" }} />
+                          )}
+                          {ci.type === "date" && (
+                            <input type="date" value={customValues[ci.id] || ""}
+                              onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                              style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))" }} />
+                          )}
+                          {ci.type === "select" && ci.options && (
+                            <select value={customValues[ci.id] || ""}
+                              onChange={(e) => { setCustomValues((prev) => ({ ...prev, [ci.id]: e.target.value })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                              style={{ ...inputStyle, borderColor: hasErr ? "#8B1A2F" : "hsl(var(--border))", appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center", paddingRight: "2rem" }}>
+                              <option value="">Select…</option>
+                              {ci.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          )}
+                          {ci.type === "color" && ci.options && ci.options.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.25rem", padding: "8px 10px", borderRadius: "0.85rem", border: hasErr ? "1.5px solid #8B1A2F" : "1.5px solid transparent" }}>
+                              {ci.options.map((col) => {
+                                const isSelected = customValues[ci.id] === col;
+                                return (
+                                  <button type="button" key={col} title={col}
+                                    onClick={() => { setCustomValues((prev) => ({ ...prev, [ci.id]: col })); setCustomErrors((x) => x.filter((k) => k !== ci.id)); }}
+                                    style={{ width: 34, height: 34, borderRadius: "50%", background: col, border: isSelected ? "3px solid hsl(var(--primary))" : "2px solid hsl(var(--border))", cursor: "pointer", outline: isSelected ? "2px solid hsl(var(--primary))" : "none", outlineOffset: 2, transition: "all 0.15s" }} />
+                                );
+                              })}
+                              {customValues[ci.id] && (
+                                <span style={{ fontFamily: "inherit", fontSize: "0.78rem", color: "hsl(var(--muted-foreground))", alignSelf: "center", marginLeft: 4 }}>{customValues[ci.id]}</span>
+                              )}
+                            </div>
+                          )}
+                          {hasErr && (
+                            <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.73rem", color: "#8B1A2F", marginTop: "0.3rem" }}>
+                              This field is required
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Stock status */}
           {isLowStock && !isOOS && (
