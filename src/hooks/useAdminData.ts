@@ -555,14 +555,25 @@ export function useDeleteOrder() {
   });
 }
 
-// ─── File upload helper ───
+// ─── File upload helper (Cloudflare R2) ───
+// Replace with your bucket's Public Development URL (or custom domain).
+const R2_PUBLIC_URL = "https://pub-55b538286fb74433b4612cd4b3d6e0b1.r2.dev";
+
 export async function uploadFile(file: File, folder: string): Promise<string> {
   const ext = file.name.split(".").pop();
   const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage
-    .from("admin-uploads")
-    .upload(fileName, file);
-  if (error) throw error;
-  const { data } = supabase.storage.from("admin-uploads").getPublicUrl(fileName);
-  return data.publicUrl;
+
+  const { data: signed, error: signError } = await supabase.functions.invoke("get-upload-url", {
+    body: { fileName, contentType: file.type },
+  });
+  if (signError) throw signError;
+
+  const uploadRes = await fetch(signed.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  if (!uploadRes.ok) throw new Error("Upload to R2 failed");
+
+  return `${R2_PUBLIC_URL}/${fileName}`;
 }
