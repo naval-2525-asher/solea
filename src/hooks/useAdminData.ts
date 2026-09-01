@@ -66,8 +66,10 @@ export function useDeleteProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: row } = await supabase.from("products").select("*").eq("id", id).single();
       const { error } = await supabase.from("products").delete().eq("id", id);
       if (error) throw error;
+      if (row) await deleteFiles(extractR2Urls(row));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });
@@ -135,8 +137,10 @@ export function useDeleteCategory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: row } = await (supabase as any).from("categories").select("*").eq("id", id).single();
       const { error } = await (supabase as any).from("categories").delete().eq("id", id);
       if (error) throw error;
+      if (row) await deleteFiles(extractR2Urls(row));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["categories"] });
@@ -282,8 +286,12 @@ export function useDeleteBestSeller() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: row } = await supabase.from("best_sellers").select("*").eq("id", id).single();
       const { error } = await supabase.from("best_sellers").delete().eq("id", id);
       if (error) throw error;
+      // Note: best_sellers references a product; only its own `custom_image`
+      // override (if set) is deleted here, never the underlying product image.
+      if (row?.custom_image) await deleteFiles(extractR2Urls(row.custom_image));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["best_sellers"] });
@@ -328,8 +336,10 @@ export function useDeleteHeroBanner() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: row } = await supabase.from("hero_banners").select("*").eq("id", id).single();
       const { error } = await supabase.from("hero_banners").delete().eq("id", id);
       if (error) throw error;
+      if (row) await deleteFiles(extractR2Urls(row));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hero_banners"] });
@@ -404,8 +414,10 @@ export function useDeleteSpottedImage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: row } = await supabase.from("spotted_images" as any).select("*").eq("id", id).single();
       const { error } = await supabase.from("spotted_images" as any).delete().eq("id", id);
       if (error) throw error;
+      if (row) await deleteFiles(extractR2Urls(row));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["spotted_images"] });
@@ -576,4 +588,37 @@ export async function uploadFile(file: File, folder: string): Promise<string> {
   if (!uploadRes.ok) throw new Error("Upload to R2 failed");
 
   return `${R2_PUBLIC_URL}/${fileName}`;
+}
+
+// ─── File delete helper (Cloudflare R2) ───
+// Deletes one or more objects from R2 via the `delete-file` edge function.
+// Never throws — a failed cleanup shouldn't block the DB row from being
+// deleted, so errors are logged and swallowed.
+export async function deleteFiles(urls: string[]): Promise<void> {
+  const keys = urls
+    .filter((u) => typeof u === "string" && u.startsWith(R2_PUBLIC_URL))
+    .map((u) => u.slice(R2_PUBLIC_URL.length + 1)); // strip "R2_PUBLIC_URL/"
+
+  if (keys.length === 0) return;
+
+  const { error } = await supabase.functions.invoke("delete-file", {
+    body: { fileNames: keys },
+  });
+  if (error) console.error("R2 cleanup failed for", keys, error);
+}
+
+// Recursively walks any row/object (including nested jsonb arrays/objects
+// like `variants`, `tee_variants`, galleries, etc.) and collects every
+// string value that looks like an R2 image URL. This means we don't have
+// to hardcode every image-bearing column per table — new jsonb fields are
+// covered automatically.
+export function extractR2Urls(value: unknown, found: string[] = []): string[] {
+  if (typeof value === "string") {
+    if (value.startsWith(R2_PUBLIC_URL)) found.push(value);
+  } else if (Array.isArray(value)) {
+    value.forEach((v) => extractR2Urls(v, found));
+  } else if (value && typeof value === "object") {
+    Object.values(value).forEach((v) => extractR2Urls(v, found));
+  }
+  return found;
 }
