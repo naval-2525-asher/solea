@@ -48,12 +48,26 @@ export function useUpsertProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (product: any) => {
+      // If this is an edit (has an id), grab the old row first so we can
+      // tell which images were removed/replaced after saving.
+      let oldUrls: string[] = [];
+      if (product?.id) {
+        const { data: oldRow } = await supabase.from("products").select("*").eq("id", product.id).single();
+        if (oldRow) oldUrls = extractR2Urls(oldRow);
+      }
+
       const { data, error } = await supabase
         .from("products")
         .upsert(product)
         .select()
         .single();
       if (error) throw error;
+
+      // Delete any R2 file that was in the old row but isn't in the new one.
+      const newUrls = extractR2Urls(data);
+      const removedUrls = oldUrls.filter((u) => !newUrls.includes(u));
+      if (removedUrls.length > 0) await deleteFiles(removedUrls);
+
       return data;
     },
     onSuccess: () => {
@@ -98,12 +112,23 @@ export function useUpsertCategory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (category: any) => {
+      let oldUrls: string[] = [];
+      if (category?.id) {
+        const { data: oldRow } = await (supabase as any).from("categories").select("*").eq("id", category.id).single();
+        if (oldRow) oldUrls = extractR2Urls(oldRow);
+      }
+
       const { data, error } = await (supabase as any)
         .from("categories")
         .upsert({ ...category, updated_at: new Date().toISOString() })
         .select()
         .single();
       if (error) throw error;
+
+      const newUrls = extractR2Urls(data);
+      const removedUrls = oldUrls.filter((u) => !newUrls.includes(u));
+      if (removedUrls.length > 0) await deleteFiles(removedUrls);
+
       return data;
     },
     onSuccess: () => {
@@ -268,12 +293,23 @@ export function useUpsertBestSeller() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (item: any) => {
+      let oldImage: string | undefined;
+      if (item?.id) {
+        const { data: oldRow } = await supabase.from("best_sellers").select("*").eq("id", item.id).single();
+        oldImage = oldRow?.custom_image;
+      }
+
       const { data, error } = await supabase
         .from("best_sellers")
         .upsert(item)
         .select()
         .single();
       if (error) throw error;
+
+      // Only the `custom_image` override belongs to this row — never touch
+      // the underlying product's own image.
+      if (oldImage && oldImage !== data?.custom_image) await deleteFiles(extractR2Urls(oldImage));
+
       return data;
     },
     onSuccess: () => {
@@ -318,12 +354,23 @@ export function useUpsertHeroBanner() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (item: any) => {
+      let oldUrls: string[] = [];
+      if (item?.id) {
+        const { data: oldRow } = await supabase.from("hero_banners").select("*").eq("id", item.id).single();
+        if (oldRow) oldUrls = extractR2Urls(oldRow);
+      }
+
       const { data, error } = await supabase
         .from("hero_banners")
         .upsert(item)
         .select()
         .single();
       if (error) throw error;
+
+      const newUrls = extractR2Urls(data);
+      const removedUrls = oldUrls.filter((u) => !newUrls.includes(u));
+      if (removedUrls.length > 0) await deleteFiles(removedUrls);
+
       return data;
     },
     onSuccess: () => {
@@ -396,12 +443,23 @@ export function useUpsertSpottedImage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (item: any) => {
+      let oldUrls: string[] = [];
+      if (item?.id) {
+        const { data: oldRow } = await supabase.from("spotted_images" as any).select("*").eq("id", item.id).single();
+        if (oldRow) oldUrls = extractR2Urls(oldRow);
+      }
+
       const { data, error } = await supabase
         .from("spotted_images" as any)
         .upsert(item)
         .select()
         .single();
       if (error) throw error;
+
+      const newUrls = extractR2Urls(data);
+      const removedUrls = oldUrls.filter((u) => !newUrls.includes(u));
+      if (removedUrls.length > 0) await deleteFiles(removedUrls);
+
       return data;
     },
     onSuccess: () => {
