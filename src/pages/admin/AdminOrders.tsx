@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/useAdminData";
 import { toast } from "sonner";
 import { Mail, ExternalLink, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
@@ -106,11 +107,13 @@ Soléa`,
 }
 
 export default function AdminOrders() {
+  const qc = useQueryClient();
   const { data: orders = [], isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
   const deleteOrder  = useDeleteOrder();
   const [filter, setFilter] = useState<string>("all");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this order permanently? This cannot be undone.")) return;
@@ -125,55 +128,105 @@ export default function AdminOrders() {
 
   const filtered = filter === "all" ? orders : orders.filter((o: any) => o.status === filter);
 
+  const runStockRpc = (rpcName: "decrement_product_stock" | "increment_product_stock", items: any[]) =>
+    Promise.allSettled(
+      items.map((item: any) => {
+        const color = item.color ?? item.customisation?.Color ?? item.customisation?.Style ?? null;
+        return (supabase as any).rpc(rpcName, {
+          p_product_id: item.product_id,
+          p_style: item.style,
+          p_size: item.size && item.size !== "One Size" ? item.size : null,
+          p_color: color,
+          p_qty: item.quantity,
+        });
+      })
+    );
+
   const handleStatus = async (id: string, status: string, order?: any) => {
+    // Reentrancy guard: ignore clicks (double-click, or a second admin acting
+    // on the same order) while a status change for THIS order is in flight.
+    if (updatingOrderId === id) return;
+    setUpdatingOrderId(id);
+
     try {
-      const wasAlreadyConfirmed  = order?.status === "confirmed";
-      const wasAlreadyCancelled  = order?.status === "cancelled";
+      // ── Confirm: atomic DB-level guard, not a client-side status check ──
+      // The stock RPC only ever fires if THIS call is the one that actually
+      // flipped the row to "confirmed" (status != 'confirmed' at the time of
+      // the update). If another admin/tab already confirmed it a moment
+      // earlier, this update matches 0 rows and we skip the decrement —
+      // this is what actually prevents double-decrementing, since a
+      // client-side "was already confirmed" check can be stale or racy
+      // across two admins/tabs.
+      if (status === "confirmed") {
+        const { data: justConfirmed, error } = await supabase
+          .from("orders" as any)
+          .update({ status: "confirmed" })
+          .eq("id", id)
+          .neq("status", "confirmed")
+          .select()
+          .maybeSingle();
+        if (error) throw error;
+
+        toast.success(`Status updated to ${status}.`);
+
+        if (justConfirmed && (justConfirmed as any).items?.length) {
+          await runStockRpc("decrement_product_stock", (justConfirmed as any).items);
+          try {
+            await supabase.functions.invoke("send-order-emails", {
+              body: { type: "admin_order_confirmed", order: justConfirmed },
+            });
+          } catch (emailErr) {
+            console.error("Confirmation email failed:", emailErr);
+          }
+        }
+
+        qc.invalidateQueries({ queryKey: ["orders"] });
+        if (order) setTimeout(() => window.open(buildMailtoLink(order, status), "_blank"), 400);
+        return;
+      }
+
+      // ── Cancel: same atomic pattern. Stock is only restored if THIS call
+      // is the one that transitioned the order out of "confirmed". If it
+      // wasn't confirmed (e.g. still pending) or someone else already
+      // cancelled it, fall back to a plain status update with no restore.
+      if (status === "cancelled") {
+        const { data: justCancelledFromConfirmed, error } = await supabase
+          .from("orders" as any)
+          .update({ status: "cancelled" })
+          .eq("id", id)
+          .eq("status", "confirmed")
+          .select()
+          .maybeSingle();
+        if (error) throw error;
+
+        if (justCancelledFromConfirmed) {
+          if ((justCancelledFromConfirmed as any).items?.length) {
+            await runStockRpc("increment_product_stock", (justCancelledFromConfirmed as any).items);
+          }
+        } else {
+          const { error: plainErr } = await supabase
+            .from("orders" as any)
+            .update({ status: "cancelled" })
+            .eq("id", id);
+          if (plainErr) throw plainErr;
+        }
+
+        toast.success(`Status updated to ${status}.`);
+        qc.invalidateQueries({ queryKey: ["orders"] });
+        if (order) setTimeout(() => window.open(buildMailtoLink(order, status), "_blank"), 400);
+        return;
+      }
+
+      // ── Every other status: no inventory implications, unchanged. ──
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated to ${status}.`);
-
-      // ── Decrement stock when admin confirms the order ───────────────────
-      // Only runs once (guard: previous status must NOT already be confirmed).
-      // This is the single source of truth for stock deduction — nothing on
-      // the checkout side touches inventory.
-      if (status === "confirmed" && !wasAlreadyConfirmed && order?.items?.length) {
-        await Promise.allSettled(
-          order.items.map((item: any) => {
-            // For accessories, variant is stored as customisation.Style
-            const color = item.color ?? item.customisation?.Color ?? item.customisation?.Style ?? null;
-            return (supabase as any).rpc("decrement_product_stock", {
-              p_product_id: item.product_id,
-              p_style: item.style,
-              p_size: item.size && item.size !== "One Size" ? item.size : null,
-              p_color: color,
-              p_qty: item.quantity,
-            });
-          })
-        );
-      }
-
-      // ── Restore stock when order is cancelled ───────────────────────────
-      if (status === "cancelled" && !wasAlreadyCancelled && wasAlreadyConfirmed && order?.items?.length) {
-        await Promise.allSettled(
-          order.items.map((item: any) => {
-            const color = item.color ?? item.customisation?.Color ?? item.customisation?.Style ?? null;
-            return (supabase as any).rpc("increment_product_stock", {
-              p_product_id: item.product_id,
-              p_style: item.style,
-              p_size: item.size && item.size !== "One Size" ? item.size : null,
-              p_color: color,
-              p_qty: item.quantity,
-            });
-          })
-        );
-      }
-
-      if (order && ["confirmed", "in-production", "shipped", "delivered", "cancelled"].includes(status)) {
-        const gmailUrl = buildMailtoLink(order, status);
-        setTimeout(() => window.open(gmailUrl, "_blank"), 400);
+      if (order && ["in-production", "shipped", "delivered"].includes(status)) {
+        setTimeout(() => window.open(buildMailtoLink(order, status), "_blank"), 400);
       }
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setUpdatingOrderId(null);
     }
   };
 
@@ -383,7 +436,8 @@ export default function AdminOrders() {
                                       <button
                                         key={s}
                                         onClick={() => handleStatus(order.id, s, order)}
-                                        className={`font-serif text-xs px-3 py-1.5 rounded-full border capitalize transition-colors ${
+                                        disabled={updatingOrderId === order.id}
+                                        className={`font-serif text-xs px-3 py-1.5 rounded-full border capitalize transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                           order.status === s
                                             ? "bg-primary text-primary-foreground border-primary"
                                             : "bg-card text-foreground border-border hover:bg-secondary"
