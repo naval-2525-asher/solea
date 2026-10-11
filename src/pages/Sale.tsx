@@ -14,6 +14,8 @@ const calcDiscount = (product: any, region: string) => {
   if (region === "UK" && product.sale_price_gbp && product.price_gbp) {
     return Math.round(((product.price_gbp - product.sale_price_gbp) / product.price_gbp) * 100);
   }
+  // UK shopper but no GBP sale price set -> there is no real UK discount.
+  if (region === "UK") return 0;
   return Math.round(((product.price - product.sale_price) / product.price) * 100);
 };
 
@@ -102,6 +104,7 @@ const getGridStyle = (viewMode: ViewMode): React.CSSProperties => {
 const Sale = () => {
   const { data: saleItemsRaw = [], isLoading } = useSaleProducts();
   const activeCategoryNames = useActiveCategoryNames();
+  const { region } = useRegion();
   const { data: settings = [] } = useSiteSettings();
   const isLive = (settings as any[]).find((s: any) => s.key === "sale_live")?.value === "true";
 
@@ -110,6 +113,8 @@ const Sale = () => {
   // other category page — sale_price/sale_price_gbp ride along for display.
   const saleProducts = (saleItemsRaw as any[])
     .filter((item) => item.products && activeCategoryNames.has(item.products.category))
+    // In the UK, only list items that actually have a GBP sale price.
+    .filter((item) => region !== "UK" || (item.sale_price_gbp != null && Number(item.sale_price_gbp) > 0))
     .map((item) => ({
       ...item.products,
       sale_price: item.sale_price,

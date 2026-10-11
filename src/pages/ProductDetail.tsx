@@ -298,8 +298,13 @@ const ProductDetail = () => {
   const saleItem = (saleData as any[]).find((s: any) => s.product_id === product.id);
   const salePrice = saleItem ? Number(saleItem.sale_price) + extraPricePk : null;
   const salePriceGbp = saleItem?.sale_price_gbp != null ? Number(saleItem.sale_price_gbp) + extraPriceGbp : null;
-  const discount = salePrice
-    ? region === "UK" && salePriceGbp && (dbProduct as any)?.price_gbp
+  // Only treat the item as "on sale" if a sale price exists for the shopper's region.
+  // (UK needs a GBP sale price; otherwise the page would show a fake sale.)
+  const hasSaleForRegion = region === "UK"
+    ? salePriceGbp !== null && salePriceGbp > 0
+    : salePrice !== null;
+  const discount = hasSaleForRegion
+    ? region === "UK" && (dbProduct as any)?.price_gbp
       ? Math.round((((dbProduct as any).price_gbp - saleItem.sale_price_gbp) / (dbProduct as any).price_gbp) * 100)
       : Math.round(((product.price - saleItem.sale_price) / product.price) * 100)
     : null;
@@ -612,7 +617,7 @@ const ProductDetail = () => {
         {/* Product info */}
         <div className="pt-4">
           <h1 className="text-foreground font-serif text-4xl font-black mb-2">{product.name}</h1>
-          {salePrice ? (
+          {hasSaleForRegion ? (
             <div className="flex items-center gap-3 mb-8">
               <p className="text-foreground font-serif text-2xl font-bold">
                 {region === "UK"
