@@ -142,6 +142,26 @@ export default function AdminOrders() {
       })
     );
 
+  // Automatically emails the customer about a status change via the
+  // send-order-emails edge function (Resend). Never throws.
+  const sendCustomerStatusEmail = async (order: any, status: string) => {
+    if (!order?.email) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("send-order-emails", {
+        body: { type: "customer_status_update", status, order },
+      });
+      if (error || (data as any)?.error) {
+        console.error("Customer status email failed:", error || (data as any)?.error);
+        toast.error("Status updated, but the customer email failed to send.");
+      } else {
+        toast.success(`Customer emailed (${status}).`);
+      }
+    } catch (e) {
+      console.error("Customer status email failed:", e);
+      toast.error("Status updated, but the customer email failed to send.");
+    }
+  };
+
   const handleStatus = async (id: string, status: string, order?: any) => {
     // Reentrancy guard: ignore clicks (double-click, or a second admin acting
     // on the same order) while a status change for THIS order is in flight.
@@ -181,7 +201,7 @@ export default function AdminOrders() {
         }
 
         qc.invalidateQueries({ queryKey: ["orders"] });
-        if (order) setTimeout(() => window.open(buildMailtoLink(order, status), "_blank"), 400);
+        if (justConfirmed) await sendCustomerStatusEmail(justConfirmed, status);
         return;
       }
 
@@ -213,7 +233,7 @@ export default function AdminOrders() {
 
         toast.success(`Status updated to ${status}.`);
         qc.invalidateQueries({ queryKey: ["orders"] });
-        if (order) setTimeout(() => window.open(buildMailtoLink(order, status), "_blank"), 400);
+        if (order) await sendCustomerStatusEmail(order, status);
         return;
       }
 
@@ -221,7 +241,7 @@ export default function AdminOrders() {
       await updateStatus.mutateAsync({ id, status });
       toast.success(`Status updated to ${status}.`);
       if (order && ["in-production", "shipped", "delivered"].includes(status)) {
-        setTimeout(() => window.open(buildMailtoLink(order, status), "_blank"), 400);
+        await sendCustomerStatusEmail(order, status);
       }
     } catch (e: any) {
       toast.error(e.message);
