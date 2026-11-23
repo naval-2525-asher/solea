@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/useAdminData";
 import { toast } from "sonner";
-import { Mail, ExternalLink, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ExternalLink, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const statusColor: Record<string, string> = {
@@ -17,94 +17,6 @@ const statusColor: Record<string, string> = {
 const statuses = ["all", "pending", "confirmed", "in-production", "shipped", "delivered", "cancelled"] as const;
 
 // ── Email template builder ────────────────────────────────────────────────────
-function buildMailtoLink(order: any, status: string): string {
-  const ref = order.id.slice(0, 8).toUpperCase();
-  const name = order.first_name;
-  const email = order.email;
-
-  const subjects: Record<string, string> = {
-    pending:          `Soléa – Order #${ref} Received`,
-    confirmed:        `Soléa – Order #${ref} Confirmed ✓`,
-    "in-production":  `Soléa – Order #${ref} Is Now In Production`,
-    shipped:          `Soléa – Order #${ref} Has Been Dispatched 🚚`,
-    delivered:        `Soléa – Order #${ref} Delivered ✅`,
-    cancelled:        `Soléa – Order #${ref} Cancellation Notice`,
-  };
-
-  const bodies: Record<string, string> = {
-    pending: `Dear ${name},
-
-Thank you for your order with Soléa! 🌸
-
-We have received your order #${ref} and are currently reviewing your payment. You will receive all updates and confirmations via email.
-
-We'll be in touch shortly once your payment has been verified.
-
-Warm regards,
-Soléa`,
-
-    confirmed: `Dear ${name},
-
-Great news! 🌸 Your Soléa order #${ref} has been verified and confirmed.
-
-We will now begin preparing your order. Since each piece is meticulously hand-beaded to order, please allow up to four weeks for production before shipping.
-
-You will receive all updates and confirmations via email.
-
-Warm regards,
-Soléa`,
-
-    "in-production": `Dear ${name},
-
-Your Soléa order #${ref} is now in production ✨
-
-Your piece is currently being prepared and we estimate it will be ready for dispatch within the next few days.
-
-We'll notify you again as soon as your order has been shipped.
-
-Thank you for your patience ♡
-
-Warm regards,
-Soléa`,
-
-    shipped: `Dear ${name},
-
-Wonderful news — your Soléa order #${ref} is on its way! 🚚
-
-Your order has been dispatched and is now with the courier. Please allow the estimated delivery timeframe for your region.
-
-You will receive all updates and confirmations via email.
-
-Warm regards,
-Soléa`,
-
-    delivered: `Dear ${name},
-
-We hope your Soléa order #${ref} has arrived safely! ✅
-
-Thank you so much for shopping with us. We'd love to hear your feedback — feel free to reply to this email.
-
-You will receive all updates and confirmations via email.
-
-With love,
-Soléa`,
-
-    cancelled: `Dear ${name},
-
-We're sorry to inform you that your Soléa order #${ref} has been cancelled.
-
-If you have any questions or would like to place a new order, please don't hesitate to reach out to us at shopsoleakhi@gmail.com.
-
-You will receive all updates and confirmations via email.
-
-Warm regards,
-Soléa`,
-  };
-
-  const subject = encodeURIComponent(subjects[status] || `Soléa – Order #${ref} Update`);
-  const body = encodeURIComponent(bodies[status] || bodies["confirmed"]);
-  return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
-}
 
 export default function AdminOrders() {
   const qc = useQueryClient();
@@ -344,15 +256,6 @@ export default function AdminOrders() {
                                 ✕ Cancel
                               </button>
                             )}
-                            <a
-                              href={buildMailtoLink(order, order.status || "confirmed")}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "Georgia, serif", fontSize: "0.72rem", fontWeight: 700, padding: "5px 12px", borderRadius: "2rem", background: "#dbeafe", color: "#1d4ed8", textDecoration: "none", whiteSpace: "nowrap" }}
-                            >
-                              <Mail size={12} />
-                              Email
-                            </a>
                             <button
                               onClick={() => handleDelete(order.id)}
                               title="Delete order"
@@ -467,37 +370,6 @@ export default function AdminOrders() {
                                       </button>
                                     ))}
                                   </div>
-                                </div>
-
-                                {/* Email notification buttons */}
-                                <div className="space-y-2 pt-1">
-                                  <p className="text-xs font-bold text-foreground">Email Customer:</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {["confirmed", "in-production", "shipped", "delivered", "cancelled"].map((s) => {
-                                      const labels: Record<string, string> = {
-                                        confirmed: "✓ Order Confirmed",
-                                        "in-production": "⚙ In Production",
-                                        shipped: "🚚 Dispatched",
-                                        delivered: "✅ Delivered",
-                                        cancelled: "✕ Cancelled",
-                                      };
-                                      return (
-                                        <a
-                                          key={s}
-                                          href={buildMailtoLink(order, s)}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="flex items-center gap-1.5 font-serif text-xs px-3 py-1.5 rounded-full border border-border bg-card text-foreground hover:bg-secondary transition-colors no-underline"
-                                        >
-                                          <Mail size={11} />
-                                          {labels[s]}
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
-                                  <p className="font-serif text-[10px] text-muted-foreground">
-                                    Opens your email client with a pre-filled template. You can edit before sending.
-                                  </p>
                                 </div>
                               </div>
                             </div>
